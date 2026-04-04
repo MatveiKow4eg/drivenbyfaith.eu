@@ -131,6 +131,16 @@ const ghostButtonStyle: CSSProperties = {
   cursor: "pointer"
 };
 
+function toSlug(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 const fieldLabelStyle: CSSProperties = {
   fontSize: 12,
   fontWeight: 700,
@@ -779,7 +789,16 @@ export default function AdminPage() {
                   >
                     <div style={fieldStackStyle}>
                       <span style={fieldLabelStyle}>Product Name</span>
-                      <input style={inputStyle} value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="Black Oversized Tee" />
+                      <input
+                        style={inputStyle}
+                        value={newProductName}
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setNewProductName(name);
+                          setNewProductSlug(toSlug(name));
+                        }}
+                        placeholder="Black Oversized Tee"
+                      />
                     </div>
                     <div style={fieldStackStyle}>
                       <span style={fieldLabelStyle}>Product Slug</span>
@@ -935,7 +954,10 @@ export default function AdminPage() {
                       <input
                         style={inputStyle}
                         value={editingProductDraft.name}
-                        onChange={(e) => patchProductDraft(editingProduct.id, { name: e.target.value })}
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          patchProductDraft(editingProduct.id, { name, slug: toSlug(name) });
+                        }}
                         placeholder="Product name"
                       />
                     </div>
