@@ -23,8 +23,31 @@ type PublicProduct = {
   variants: PublicVariant[];
 };
 
+type CartItem = {
+  variantId: string;
+  productId: string;
+  slug: string;
+  name: string;
+  size: string;
+  color: string;
+  unitPriceMinor: number;
+  qty: number;
+  imagePath: string | null;
+};
+
+type CheckoutCustomer = {
+  email: string;
+  fullName: string;
+  line1: string;
+  line2: string;
+  city: string;
+  postalCode: string;
+  countryCode: string;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.drivenbyfaith.eu/api/v1";
 const API_ORIGIN = API_BASE.replace(/\/api\/v1\/?$/, "");
+const CART_STORAGE_KEY = "dbf_cart_v1";
 
 function resolveImageSrc(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
@@ -35,6 +58,23 @@ function resolveImageSrc(path: string): string {
 
 function fmt(amountMinor: number) {
   return (amountMinor / 100).toFixed(2);
+}
+
+function readCart(): CartItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CART_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCart(items: CartItem[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
 }
 
 export default function ProductPage() {
@@ -49,6 +89,20 @@ export default function ProductPage() {
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [mainImageIndex, setMainImageIndex] = useState(0);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [promoCode, setPromoCode] = useState("");
+  const [customer, setCustomer] = useState<CheckoutCustomer>({
+    email: "",
+    fullName: "",
+    line1: "",
+    line2: "",
+    city: "",
+    postalCode: "",
+    countryCode: "DE"
+  });
 
   const sections: ProductSection[] = (() => {
     if (!product?.sectionsJson) return [];
@@ -56,6 +110,12 @@ export default function ProductPage() {
   })();
 
   const selectedVariant = product?.variants.find((v) => v.id === selectedVariantId) ?? null;
+  const cartCount = cartItems.reduce((sum, item) => sum + item.qty, 0);
+  const cartSubtotalMinor = cartItems.reduce((sum, item) => sum + item.qty * item.unitPriceMinor, 0);
+
+  useEffect(() => {
+    setCartItems(readCart());
+  }, []);
 
   useEffect(() => {
     if (!slug) return;
@@ -75,20 +135,115 @@ export default function ProductPage() {
       .catch(() => { setNotFound(true); setLoading(false); });
   }, [slug]);
 
+  const addToCart = () => {
+    if (!product || !selectedVariant || selectedVariant.stock <= 0) return;
+
+    const imagePath = (product.images.find((img) => img.isMain) ?? product.images[0])?.path ?? null;
+    const current = readCart();
+    const next = [...current];
+    const index = next.findIndex((item) => item.variantId === selectedVariant.id);
+
+    if (index >= 0) {
+      next[index] = {
+        ...next[index],
+        qty: Math.min(20, next[index].qty + 1)
+      };
+    } else {
+      next.push({
+        variantId: selectedVariant.id,
+        productId: product.id,
+        slug: product.slug,
+        name: product.name,
+        size: selectedVariant.size,
+        color: selectedVariant.color,
+        unitPriceMinor: selectedVariant.price.amountMinor,
+        qty: 1,
+        imagePath
+      });
+    }
+
+    writeCart(next);
+    setCartItems(next);
+    setCartOpen(true);
+  };
+
+  const updateCartQty = (variantId: string, qty: number) => {
+    const next = cartItems
+      .map((item) => (item.variantId === variantId ? { ...item, qty: Math.max(1, Math.min(20, qty)) } : item))
+      .filter((item) => item.qty > 0);
+    writeCart(next);
+    setCartItems(next);
+  };
+
+  const removeFromCart = (variantId: string) => {
+    const next = cartItems.filter((item) => item.variantId !== variantId);
+    writeCart(next);
+    setCartItems(next);
+  };
+
+  const startCheckout = async () => {
+    if (cartItems.length === 0 || checkoutLoading) return;
+
+    setCheckoutError(null);
+    setCheckoutLoading(true);
+
+    try {
+      const countryCode = customer.countryCode.trim().toUpperCase() || "DE";
+      const response = await fetch(`${API_BASE}/checkout/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          countryCode,
+          promoCode: promoCode.trim() || undefined,
+          items: cartItems.map((item) => ({ variantId: item.variantId, qty: item.qty })),
+          customer: {
+            email: customer.email.trim(),
+            fullName: customer.fullName.trim(),
+            address: {
+              line1: customer.line1.trim(),
+              line2: customer.line2.trim() || undefined,
+              city: customer.city.trim(),
+              postalCode: customer.postalCode.trim(),
+              countryCode
+            }
+          },
+          successUrl: `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${window.location.origin}/products/${slug}`
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message ?? "Checkout failed");
+      }
+
+      if (typeof data?.checkoutUrl === "string" && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      throw new Error("Checkout URL missing");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Checkout failed";
+      setCheckoutError(message);
+      setCheckoutLoading(false);
+    }
+  };
+
   if (loading) {
     return (
-      <main style={{ minHeight: "100vh", background: "#040404", display: "grid", placeItems: "center" }}>
-        <p style={{ color: "#a3a3ad", fontFamily: "var(--font-body)" }}>Loading…</p>
+      <main className="dbf-experience dbf-product-page">
+        <p className="dbf-product-loading">Loading…</p>
       </main>
     );
   }
 
   if (notFound || !product) {
     return (
-      <main style={{ minHeight: "100vh", background: "#040404", display: "grid", placeItems: "center", fontFamily: "var(--font-body)" }}>
-        <div style={{ textAlign: "center", color: "#f7f2e9" }}>
-          <p style={{ fontSize: 22, marginBottom: 16 }}>Product not found</p>
-          <button onClick={() => router.push("/")} style={{ color: "#a3a3ad", background: "none", border: "1px solid #333", borderRadius: 8, padding: "10px 20px", cursor: "pointer" }}>
+      <main className="dbf-experience dbf-product-page">
+        <div className="dbf-product-not-found">
+          <p>Product not found</p>
+          <button onClick={() => router.push("/")} className="dbf-ghost-btn">
             ← Back
           </button>
         </div>
@@ -104,87 +259,88 @@ export default function ProductPage() {
     .filter((c, i, a) => a.indexOf(c) === i);
 
   return (
-    <main style={{ minHeight: "100vh", background: "#040404", color: "#f7f2e9", fontFamily: "var(--font-body)" }}>
-
+    <main className="dbf-experience dbf-product-page">
       {previewSrc ? (
-        <div onClick={() => setPreviewSrc(null)} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.92)", display: "grid", placeItems: "center", cursor: "zoom-out" }}>
-          <img src={previewSrc} alt="Preview" style={{ maxWidth: "92vw", maxHeight: "92vh", objectFit: "contain", borderRadius: 12 }} />
+        <div onClick={() => setPreviewSrc(null)} className="dbf-preview-overlay">
+          <img src={previewSrc} alt="Preview" className="dbf-preview-image" />
         </div>
       ) : null}
 
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px" }}>
-        <button onClick={() => router.back()} style={{ color: "#a3a3ad", background: "none", border: "none", cursor: "pointer", fontSize: 14, marginBottom: 28, display: "flex", alignItems: "center", gap: 6 }}>
+      <header className="dbf-product-header">
+        <div className="hero-logo" aria-label="Driven By Faith logo">
+          <span className="hero-logo-top">DRIVEN BY</span>
+          <span className="hero-logo-btm">
+            {"FAITH".split("").map((l, i) => <span key={i}>{l}</span>)}
+          </span>
+        </div>
+        <nav className="hero-nav" aria-label="Main navigation">
+          <a href="/">Home</a>
+          <a href="/#scents">Shop</a>
+          <a href="#product-details">Details</a>
+          <a href="#product-sections">Info</a>
+        </nav>
+        <button className="dbf-cart-toggle" onClick={() => setCartOpen(true)}>
+          CART ({cartCount})
+        </button>
+      </header>
+
+      <section className="dbf-product-shell" id="product-details">
+        <button onClick={() => router.back()} className="dbf-back-btn">
           ← Back
         </button>
 
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 48, alignItems: "start" }}>
-
-          {/* ── Left: Images ── */}
-          <div>
+        <div className="dbf-product-grid">
+          <div className="dbf-product-gallery">
             {mainImage ? (
-              <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", background: "#0f0f10", cursor: "zoom-in" }} onClick={() => setPreviewSrc(resolveImageSrc(mainImage.path))}>
+              <div className="dbf-main-image-wrap" onClick={() => setPreviewSrc(resolveImageSrc(mainImage.path))}>
                 <img
                   src={resolveImageSrc(mainImage.path)}
                   alt={mainImage.alt ?? product.name}
-                  style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "cover", display: "block" }}
+                  className="dbf-main-image"
                 />
               </div>
             ) : (
-              <div style={{ width: "100%", aspectRatio: "1 / 1", background: "#0f0f10", borderRadius: 16, display: "grid", placeItems: "center", color: "#555" }}>No image</div>
+              <div className="dbf-main-image-empty">No image</div>
             )}
+
             {product.images.length > 1 ? (
-              <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+              <div className="dbf-thumb-list">
                 {product.images.map((img, idx) => (
                   <img
                     key={idx}
                     src={resolveImageSrc(img.path)}
                     alt={img.alt ?? ""}
                     onClick={() => setMainImageIndex(idx)}
-                    style={{
-                      width: 70, height: 70, objectFit: "cover", borderRadius: 8, cursor: "pointer",
-                      border: `2px solid ${idx === mainImageIndex ? "#fff" : "#252529"}`
-                    }}
+                    className={`dbf-thumb ${idx === mainImageIndex ? "active" : ""}`}
                   />
                 ))}
               </div>
             ) : null}
           </div>
 
-          {/* ── Right: Info + Buy ── */}
-          <div style={{ display: "grid", gap: 20 }}>
-            <div>
-              <h1 style={{ fontFamily: "var(--font-headline)", fontSize: 42, letterSpacing: 1, marginBottom: 6, lineHeight: 1.1 }}>{product.name}</h1>
-              {product.description ? (
-                <p style={{ color: "#a3a3ad", fontSize: 15, lineHeight: 1.7 }}>{product.description}</p>
-              ) : null}
-            </div>
+          <div className="dbf-product-info">
+            <h1>{product.name}</h1>
+            {product.description ? <p className="dbf-product-description">{product.description}</p> : null}
 
-            {selectedVariant ? (
-              <div style={{ fontSize: 30, fontFamily: "var(--font-headline)", letterSpacing: 0.5 }}>
-                {fmt(selectedVariant.price.amountMinor)} EUR
-              </div>
-            ) : null}
+            {selectedVariant ? <div className="dbf-product-price">{fmt(selectedVariant.price.amountMinor)} EUR</div> : null}
 
-            {/* Size picker */}
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: "#a3a3ad", textTransform: "uppercase", marginBottom: 10 }}>Size</p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <p className="dbf-picker-label">Size</p>
+              <div className="dbf-picker-row">
                 {sizes.map((size) => {
-                  const variantForSize = product.variants.find((v) => v.size === size && (!selectedVariant || v.color === selectedVariant.color)) ?? product.variants.find((v) => v.size === size);
+                  const variantForSize =
+                    product.variants.find((v) => v.size === size && (!selectedVariant || v.color === selectedVariant.color)) ??
+                    product.variants.find((v) => v.size === size);
                   const active = selectedVariant?.size === size;
                   const outOfStock = !variantForSize || variantForSize.stock === 0;
                   return (
                     <button
                       key={size}
                       disabled={outOfStock}
-                      onClick={() => { if (variantForSize) setSelectedVariantId(variantForSize.id); }}
-                      style={{
-                        width: 48, height: 48, borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: outOfStock ? "not-allowed" : "pointer",
-                        background: active ? "#fff" : "transparent",
-                        color: active ? "#040404" : outOfStock ? "#444" : "#f7f2e9",
-                        border: `2px solid ${active ? "#fff" : outOfStock ? "#333" : "#555"}`,
-                        opacity: outOfStock ? 0.45 : 1
+                      onClick={() => {
+                        if (variantForSize) setSelectedVariantId(variantForSize.id);
                       }}
+                      className={`dbf-pill-btn size ${active ? "active" : ""}`}
                     >
                       {size}
                     </button>
@@ -193,24 +349,20 @@ export default function ProductPage() {
               </div>
             </div>
 
-            {/* Color picker */}
             {colorsForSelectedSize.length > 1 ? (
               <div>
-                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: "#a3a3ad", textTransform: "uppercase", marginBottom: 10 }}>Color</p>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <p className="dbf-picker-label">Color</p>
+                <div className="dbf-picker-row">
                   {colorsForSelectedSize.map((color) => {
                     const v = product.variants.find((x) => x.color === color && (!selectedVariant || x.size === selectedVariant.size));
                     const active = selectedVariant?.color === color;
                     return (
                       <button
                         key={color}
-                        onClick={() => { if (v) setSelectedVariantId(v.id); }}
-                        style={{
-                          padding: "8px 14px", borderRadius: 8, fontSize: 13, cursor: "pointer",
-                          background: active ? "#fff" : "transparent",
-                          color: active ? "#040404" : "#f7f2e9",
-                          border: `2px solid ${active ? "#fff" : "#555"}`
+                        onClick={() => {
+                          if (v) setSelectedVariantId(v.id);
                         }}
+                        className={`dbf-pill-btn ${active ? "active" : ""}`}
                       >
                         {color}
                       </button>
@@ -221,28 +373,21 @@ export default function ProductPage() {
             ) : null}
 
             {selectedVariant ? (
-              <p style={{ fontSize: 13, color: selectedVariant.stock > 0 ? "#17803d" : "#c33131" }}>
+              <p className={`dbf-stock ${selectedVariant.stock > 0 ? "in" : "out"}`}>
                 {selectedVariant.stock > 0 ? `${selectedVariant.stock} in stock` : "Out of stock"}
               </p>
             ) : null}
 
-            <a
-              href={selectedVariant && selectedVariant.stock > 0 ? `/?variantId=${selectedVariant.id}&slug=${product.slug}` : undefined}
-              style={{
-                display: "block", textAlign: "center", padding: "16px 0",
-                background: selectedVariant && selectedVariant.stock > 0 ? "#fff" : "#1a1a1a",
-                color: selectedVariant && selectedVariant.stock > 0 ? "#040404" : "#555",
-                borderRadius: 10, fontWeight: 700, fontFamily: "var(--font-headline)", fontSize: 18, letterSpacing: 1,
-                textDecoration: "none", cursor: selectedVariant && selectedVariant.stock > 0 ? "pointer" : "not-allowed",
-                pointerEvents: selectedVariant && selectedVariant.stock > 0 ? "auto" : "none"
-              }}
+            <button
+              className="dbf-add-btn"
+              disabled={!selectedVariant || selectedVariant.stock <= 0}
+              onClick={addToCart}
             >
-              {selectedVariant && selectedVariant.stock > 0 ? "ADD TO CART" : "OUT OF STOCK"}
-            </a>
+              {!selectedVariant || selectedVariant.stock <= 0 ? "OUT OF STOCK" : "ADD TO CART"}
+            </button>
 
-            {/* Sections */}
             {sections.length > 0 ? (
-              <div style={{ display: "grid", gap: 0, borderTop: "1px solid #1f1f22", marginTop: 8 }}>
+              <div className="dbf-sections" id="product-sections">
                 {sections.map((section, si) => (
                   <SectionAccordion key={si} section={section} defaultOpen={si === 0} />
                 ))}
@@ -250,7 +395,104 @@ export default function ProductPage() {
             ) : null}
           </div>
         </div>
-      </div>
+      </section>
+
+      <aside className={`dbf-cart-drawer ${cartOpen ? "open" : ""}`} aria-label="Cart drawer">
+        <div className="dbf-cart-head">
+          <p>Cart</p>
+          <button className="dbf-ghost-btn" onClick={() => setCartOpen(false)}>
+            Close
+          </button>
+        </div>
+
+        <div className="dbf-cart-items">
+          {cartItems.length === 0 ? (
+            <p className="dbf-cart-empty">Your cart is empty.</p>
+          ) : (
+            cartItems.map((item) => (
+              <div key={item.variantId} className="dbf-cart-item">
+                <div className="dbf-cart-item-top">
+                  <p>{item.name}</p>
+                  <button className="dbf-remove-btn" onClick={() => removeFromCart(item.variantId)}>
+                    Remove
+                  </button>
+                </div>
+                <p className="dbf-cart-item-meta">
+                  {item.size} / {item.color}
+                </p>
+                <div className="dbf-cart-qty-row">
+                  <button onClick={() => updateCartQty(item.variantId, item.qty - 1)}>-</button>
+                  <span>{item.qty}</span>
+                  <button onClick={() => updateCartQty(item.variantId, item.qty + 1)}>+</button>
+                  <strong>{fmt(item.unitPriceMinor * item.qty)} EUR</strong>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="dbf-cart-checkout">
+          <div className="dbf-subtotal-row">
+            <span>Subtotal</span>
+            <strong>{fmt(cartSubtotalMinor)} EUR</strong>
+          </div>
+
+          <div className="dbf-form-grid">
+            <input
+              placeholder="Email"
+              value={customer.email}
+              onChange={(e) => setCustomer((prev) => ({ ...prev, email: e.target.value }))}
+            />
+            <input
+              placeholder="Full Name"
+              value={customer.fullName}
+              onChange={(e) => setCustomer((prev) => ({ ...prev, fullName: e.target.value }))}
+            />
+            <input
+              placeholder="Address Line 1"
+              value={customer.line1}
+              onChange={(e) => setCustomer((prev) => ({ ...prev, line1: e.target.value }))}
+            />
+            <input
+              placeholder="Address Line 2"
+              value={customer.line2}
+              onChange={(e) => setCustomer((prev) => ({ ...prev, line2: e.target.value }))}
+            />
+            <input
+              placeholder="City"
+              value={customer.city}
+              onChange={(e) => setCustomer((prev) => ({ ...prev, city: e.target.value }))}
+            />
+            <input
+              placeholder="Postal Code"
+              value={customer.postalCode}
+              onChange={(e) => setCustomer((prev) => ({ ...prev, postalCode: e.target.value }))}
+            />
+            <input
+              placeholder="Country (2 letters, e.g. DE)"
+              maxLength={2}
+              value={customer.countryCode}
+              onChange={(e) => setCustomer((prev) => ({ ...prev, countryCode: e.target.value.toUpperCase() }))}
+            />
+            <input
+              placeholder="Promo code (optional)"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          {checkoutError ? <p className="dbf-checkout-error">{checkoutError}</p> : null}
+
+          <button
+            className="dbf-checkout-btn"
+            disabled={cartItems.length === 0 || checkoutLoading}
+            onClick={startCheckout}
+          >
+            {checkoutLoading ? "CREATING SESSION..." : "CHECKOUT"}
+          </button>
+        </div>
+      </aside>
+      {cartOpen ? <div className="dbf-cart-overlay" onClick={() => setCartOpen(false)} /> : null}
     </main>
   );
 }
@@ -258,21 +500,18 @@ export default function ProductPage() {
 function SectionAccordion({ section, defaultOpen }: { section: ProductSection; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   return (
-    <div style={{ borderBottom: "1px solid #1f1f22" }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        style={{ width: "100%", textAlign: "left", padding: "14px 0", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", color: "#f7f2e9" }}
-      >
-        <span style={{ fontFamily: "var(--font-headline)", fontSize: 16, letterSpacing: 0.6 }}>{section.title}</span>
-        <span style={{ fontSize: 20, color: "#a3a3ad", lineHeight: 1 }}>{open ? "−" : "+"}</span>
+    <div className="dbf-accordion">
+      <button onClick={() => setOpen((v) => !v)} className="dbf-accordion-btn">
+        <span>{section.title}</span>
+        <span>{open ? "-" : "+"}</span>
       </button>
       {open ? (
-        <ul style={{ margin: 0, paddingLeft: 0, paddingBottom: 14, display: "grid", gap: 6, listStyle: "none" }}>
-          {section.items.filter((item) => item.trim()).map((item, ii) => (
-            <li key={ii} style={{ color: "#a3a3ad", fontSize: 14, lineHeight: 1.6, paddingLeft: 12, borderLeft: "2px solid #252529" }}>
-              {item}
-            </li>
-          ))}
+        <ul className="dbf-accordion-list">
+          {section.items
+            .filter((item) => item.trim())
+            .map((item, ii) => (
+              <li key={ii}>{item}</li>
+            ))}
         </ul>
       ) : null}
     </div>
