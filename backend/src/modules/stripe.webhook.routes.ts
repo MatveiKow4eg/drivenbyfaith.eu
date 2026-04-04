@@ -7,7 +7,7 @@ import { prisma } from "../db.js";
 const stripeWebhookRouter = Router();
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 
-stripeWebhookRouter.post("/webhooks/stripe", async (req: Request, res: Response) => {
+stripeWebhookRouter.post("/", async (req: Request, res: Response) => {
   const signature = req.headers["stripe-signature"];
 
   if (!signature || Array.isArray(signature)) {
