@@ -69,6 +69,7 @@ productsRouter.get("/products", async (req: Request, res: Response) => {
         slug: product.slug,
         name: product.name,
         description: product.description,
+        sectionsJson: product.sectionsJson,
         images: product.images.map((img) => ({
           path: img.path,
           alt: img.alt,
@@ -136,6 +137,7 @@ productsRouter.get("/products/:slug", async (req: Request, res: Response) => {
     slug: product.slug,
     name: product.name,
     description: product.description,
+    sectionsJson: product.sectionsJson,
     images: product.images.map((img) => ({
       path: img.path,
       alt: img.alt,

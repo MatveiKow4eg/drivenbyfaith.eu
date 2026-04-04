@@ -1,49 +1,61 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
-type Product = {
-  id: "midnight" | "sunrise";
-  name: string;
-  mood: string;
-  price: string;
-  glow: "red" | "amber";
+type ApiVariant = {
+  price: { currency: string; amountMinor: number };
+  stock: number;
 };
 
-const PRODUCTS: Product[] = [
-  {
-    id: "midnight",
-    name: "MIDNIGHT",
-    mood: "Aggressive / Deep / Night",
-    price: "€34",
-    glow: "red",
-  },
-  {
-    id: "sunrise",
-    name: "SUNRISE",
-    mood: "Clean / Warm / Smooth",
-    price: "€34",
-    glow: "amber",
-  },
-];
+type ApiProduct = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  images: Array<{ path: string; alt: string | null; isMain: boolean }>;
+  variants: ApiVariant[];
+};
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.drivenbyfaith.eu/api/v1";
+const API_ORIGIN = API_BASE.replace(/\/api\/v1\/?$/, "");
+const GLOWS: Array<"red" | "amber"> = ["red", "amber"];
+
+function resolveImageSrc(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  if (path.startsWith("/")) return `${API_ORIGIN}${path}`;
+  return `${API_ORIGIN}/${path}`;
+}
+
+function getMinPrice(variants: ApiVariant[]): string | null {
+  const eur = variants.filter((v) => v.price.currency === "EUR" && v.stock > 0);
+  if (!eur.length) {
+    const any = variants.filter((v) => v.price.currency === "EUR");
+    if (!any.length) return null;
+    return `€${(any[0].price.amountMinor / 100).toFixed(0)}`;
+  }
+  const min = Math.min(...eur.map((v) => v.price.amountMinor));
+  return `€${(min / 100).toFixed(0)}`;
+}
 
 export default function Home() {
   const productsRef = useRef<HTMLElement>(null);
+  const [products, setProducts] = useState<ApiProduct[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [quantity, setQuantity] = useState(1);
-
-  const openQuickBuy = (product: Product) => {
-    setSelectedProduct(product);
-    setQuantity(1);
-  };
-
-  const closeQuickBuy = () => setSelectedProduct(null);
+  useEffect(() => {
+    fetch(`${API_BASE}/products`)
+      .then((r) => r.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : (data?.products ?? data?.data ?? []);
+        setProducts(list);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
   return (
-    <main
-      className="dbf-experience"
-    >
+    <main className="dbf-experience">
 
       <section className="hero" aria-label="Driven By Faith hero">
         <div className="hero-copy">
@@ -64,86 +76,52 @@ export default function Home() {
       </section>
 
       <section id="scents" ref={productsRef} className="product-selection" aria-label="Select a scent">
-        {PRODUCTS.map((product) => (
-          <article
-            key={product.id}
-            className={`product-scene ${product.glow}`}
-            aria-label={`${product.name} fragrance`}
-            onClick={() => openQuickBuy(product)}
-            style={{ cursor: "pointer" }}
-          >
-            <div className="scene-bg-glow" aria-hidden="true" />
-            <div className="product-visual" aria-hidden="true">
-              <img src={`/products/${product.id}.png`} alt="" className="product-img" />
-            </div>
-            <div className="scene-card-info">
-              <p className="scene-mini-title">{product.name}</p>
-              <p className="scene-mini-price">{product.price}</p>
-            </div>
-          </article>
-        ))}
+        {loading ? (
+          <p style={{ color: "#a3a3ad", gridColumn: "1/-1", textAlign: "center", padding: "60px 0" }}>Loading…</p>
+        ) : products.length === 0 ? (
+          <p style={{ color: "#a3a3ad", gridColumn: "1/-1", textAlign: "center", padding: "60px 0" }}>No products yet.</p>
+        ) : products.map((product, idx) => {
+          const mainImg = product.images.find((i) => i.isMain) ?? product.images[0];
+          const price = getMinPrice(product.variants);
+          const glow = GLOWS[idx % GLOWS.length];
+          return (
+            <Link
+              key={product.id}
+              href={`/products/${product.slug}`}
+              style={{ textDecoration: "none" }}
+            >
+              <article
+                className={`product-scene ${glow}`}
+                aria-label={`${product.name} fragrance`}
+                style={{ cursor: "pointer" }}
+              >
+                <div className="scene-bg-glow" aria-hidden="true" />
+                <div className="product-visual" aria-hidden="true">
+                  {mainImg ? (
+                    <img src={resolveImageSrc(mainImg.path)} alt={mainImg.alt ?? product.name} className="product-img" />
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", background: "#111" }} />
+                  )}
+                </div>
+                <div className="scene-card-info">
+                  <p className="scene-mini-title">{product.name}</p>
+                  {price ? <p className="scene-mini-price">{price}</p> : null}
+                </div>
+              </article>
+            </Link>
+          );
+        })}
       </section>
 
       <footer id="contact" className="art-footer">
         <p className="footer-brand">DRIVEN BY FAITH</p>
         <div className="footer-links">
-          <a href="#" aria-label="Instagram">
-            INSTAGRAM
-          </a>
-          <a href="#" aria-label="TikTok">
-            TIKTOK
-          </a>
-          <a href="#" aria-label="Contact">
-            CONTACT
-          </a>
+          <a href="#" aria-label="Instagram">INSTAGRAM</a>
+          <a href="#" aria-label="TikTok">TIKTOK</a>
+          <a href="#" aria-label="Contact">CONTACT</a>
         </div>
       </footer>
 
-      {selectedProduct && (
-        <div className="quick-buy-overlay" role="dialog" aria-modal="true" aria-label="Quick buy">
-          <button type="button" className="overlay-close" onClick={closeQuickBuy}>
-            CLOSE
-          </button>
-          <div className={`quick-buy-card ${selectedProduct.glow}`}>
-            <div className="quick-visual" aria-hidden="true">
-              <div className="quick-shape">
-                <span className="shape-hole" />
-              </div>
-            </div>
-            <div className="quick-content">
-              <p className="quick-label">{selectedProduct.name}</p>
-              <p className="quick-price">{selectedProduct.price}</p>
-              <label htmlFor="qty">QUANTITY</label>
-              <div className="qty-row">
-                <button
-                  type="button"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  aria-label="Decrease quantity"
-                >
-                  -
-                </button>
-                <input
-                  id="qty"
-                  type="number"
-                  min={1}
-                  value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-                />
-                <button
-                  type="button"
-                  onClick={() => setQuantity((q) => q + 1)}
-                  aria-label="Increase quantity"
-                >
-                  +
-                </button>
-              </div>
-              <button type="button" className="buy-now">
-                BUY NOW
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
