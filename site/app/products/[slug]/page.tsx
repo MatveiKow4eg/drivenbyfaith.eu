@@ -268,8 +268,8 @@ export default function ProductPage() {
         </div>
       ) : null}
 
-      <section className="hero dbf-product-hero" aria-label="Driven By Faith header">
-        <div className="hero-copy dbf-product-hero-copy">
+      <section className="hero" aria-label="Driven By Faith hero">
+        <div className="hero-copy">
           <div className="hero-logo" aria-label="Driven By Faith logo">
             <span className="hero-logo-top">DRIVEN BY</span>
             <span className="hero-logo-btm">
@@ -277,14 +277,13 @@ export default function ProductPage() {
             </span>
           </div>
           <nav className="hero-nav" aria-label="Main navigation">
-            <a href="/">Home</a>
             <a href="/#scents">Shop</a>
-            <a href="#product">Product</a>
-            <a href="#contact">Contact</a>
+            <a href="/#scents">New</a>
+            <a href="/#contact">Community</a>
+            <a href="/#contact">Contact</a>
+            <button className="dbf-cart-toggle" onClick={() => setCartOpen(true)}>CART ({cartCount})</button>
           </nav>
-          <button className="dbf-cart-toggle" onClick={() => setCartOpen(true)}>
-            CART ({cartCount})
-          </button>
+          <h1>Driven by faith</h1>
         </div>
       </section>
 

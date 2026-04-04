@@ -626,14 +626,7 @@ body {
   margin-top: 0;
 }
 
-.dbf-product-hero.hero {
-  min-height: 0;
-}
 
-.dbf-product-hero-copy.hero-copy {
-  min-height: clamp(100px, 14vw, 155px);
-  padding-bottom: 1.4rem;
-}
 
 .dbf-product-control-card {
   width: min(92%, 620px);
@@ -685,24 +678,21 @@ body {
 }
 
 .dbf-cart-toggle {
-  position: absolute;
-  right: clamp(1rem, 4vw, 2.4rem);
-  top: 30px;
-  border: 1px solid rgba(255, 180, 128, 0.42);
-  background: rgba(15, 10, 7, 0.72);
-  color: #f6efe5;
+  border: 1px solid rgba(255, 141, 38, 0.4);
+  background: rgba(20, 11, 7, 0.64);
+  color: rgba(244, 242, 239, 0.84);
   font-family: var(--font-body), sans-serif;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  font-size: 0.72rem;
-  padding: 0.6rem 0.78rem;
+  font-size: clamp(0.56rem, 1vw, 0.76rem);
+  padding: 0.38rem 0.62rem;
   cursor: pointer;
+  transition: color 220ms ease, border-color 220ms ease;
 }
 
-.dbf-cart-toggle.in-panel {
-  position: static;
-  right: auto;
-  top: auto;
+.dbf-cart-toggle:hover {
+  color: #f4f2ef;
+  border-color: rgba(255, 197, 130, 0.88);
 }
 
 .dbf-product-shell {
