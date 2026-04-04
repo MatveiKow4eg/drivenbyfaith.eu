@@ -268,23 +268,25 @@ export default function ProductPage() {
         </div>
       ) : null}
 
-      <header className="dbf-product-header">
-        <div className="hero-logo" aria-label="Driven By Faith logo">
-          <span className="hero-logo-top">DRIVEN BY</span>
-          <span className="hero-logo-btm">
-            {"FAITH".split("").map((l, i) => <span key={i}>{l}</span>)}
-          </span>
+      <section className="hero dbf-product-hero" aria-label="Driven By Faith header">
+        <div className="hero-copy dbf-product-hero-copy">
+          <div className="hero-logo" aria-label="Driven By Faith logo">
+            <span className="hero-logo-top">DRIVEN BY</span>
+            <span className="hero-logo-btm">
+              {"FAITH".split("").map((l, i) => <span key={i}>{l}</span>)}
+            </span>
+          </div>
+          <nav className="hero-nav" aria-label="Main navigation">
+            <a href="/">Home</a>
+            <a href="/#scents">Shop</a>
+            <a href="#product">Product</a>
+            <a href="#contact">Contact</a>
+          </nav>
+          <button className="dbf-cart-toggle" onClick={() => setCartOpen(true)}>
+            CART ({cartCount})
+          </button>
         </div>
-        <nav className="hero-nav" aria-label="Main navigation">
-          <a href="/">Home</a>
-          <a href="/#scents">Shop</a>
-          <a href="#product">Product</a>
-          <a href="#contact">Contact</a>
-        </nav>
-        <button className="dbf-cart-toggle" onClick={() => setCartOpen(true)}>
-          CART ({cartCount})
-        </button>
-      </header>
+      </section>
 
       <section id="product" className="product-selection" aria-label="Product details">
         <article className={`product-scene ${sceneGlow}`} aria-label={`${product.name} image`}>

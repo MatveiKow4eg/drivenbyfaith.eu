@@ -626,6 +626,15 @@ body {
   margin-top: 0;
 }
 
+.dbf-product-hero.hero {
+  min-height: 0;
+}
+
+.dbf-product-hero-copy.hero-copy {
+  min-height: clamp(100px, 14vw, 155px);
+  padding-bottom: 1.4rem;
+}
+
 .dbf-product-control-card {
   width: min(92%, 620px);
   margin: auto;
