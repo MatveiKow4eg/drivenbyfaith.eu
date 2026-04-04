@@ -124,10 +124,8 @@ export default function AdminPage() {
 
   const [newProductName, setNewProductName] = useState("");
   const [newProductSlug, setNewProductSlug] = useState("");
-  const [newPromoCode, setNewPromoCode] = useState("SPRING15");
   const [showCreateProductForm, setShowCreateProductForm] = useState(false);
-  const [productSearch, setProductSearch] = useState("");
-  const [productSort, setProductSort] = useState<"newest" | "oldest" | "nameAsc" | "nameDesc">("newest");
+  const [editingProductId, setEditingProductId] = useState("");
 
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminPassword, setNewAdminPassword] = useState("");
@@ -161,27 +159,11 @@ export default function AdminPage() {
     () => selectedProduct?.variants.find((v) => v.id === selectedVariantId) ?? null,
     [selectedProduct, selectedVariantId]
   );
+  const editingProduct = useMemo(() => products.find((p) => p.id === editingProductId) ?? null, [products, editingProductId]);
   const visibleOrders = useMemo(
     () => orders.filter((o) => (orderFilter === "ALL" ? true : o.status === orderFilter)),
     [orders, orderFilter]
   );
-  const visibleProducts = useMemo(() => {
-    const q = productSearch.trim().toLowerCase();
-    const filtered = q
-      ? products.filter((p) => p.name.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q))
-      : products;
-
-    const sorted = [...filtered];
-    if (productSort === "nameAsc") {
-      sorted.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (productSort === "nameDesc") {
-      sorted.sort((a, b) => b.name.localeCompare(a.name));
-    } else if (productSort === "oldest") {
-      sorted.reverse();
-    }
-
-    return sorted;
-  }, [products, productSearch, productSort]);
 
   function pushToast(text: string, kind: Toast["kind"]) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -505,25 +487,6 @@ export default function AdminPage() {
     await loadAll();
   }
 
-  async function createPromo(e: FormEvent) {
-    e.preventDefault();
-    if (!token) return;
-
-    const response = await authedRequest("/admin/promocodes", {
-      method: "POST",
-      body: JSON.stringify({ code: newPromoCode, type: "PERCENT", value: 15, isActive: true })
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      pushToast(data.message ?? "Create promo failed", "error");
-      return;
-    }
-
-    pushToast("Promo created", "success");
-    await loadAll();
-  }
-
   async function savePromoInline(promoId: string) {
     const draft = promoDrafts[promoId];
     if (!draft) return;
@@ -652,42 +615,16 @@ export default function AdminPage() {
           {activeTab === "products" ? (
             <>
               <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
-                <div
-                  style={{
-                    position: "sticky",
-                    top: 8,
-                    zIndex: 20,
-                    background: color.card,
-                    paddingBottom: 10,
-                    marginBottom: 10,
-                    borderBottom: `1px solid ${color.border}`
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-                    <h2 style={{ fontSize: 20 }}>Products ({visibleProducts.length}/{products.length})</h2>
-                    <button style={buttonStyle} onClick={() => setShowCreateProductForm((v) => !v)}>
-                      {showCreateProductForm ? "Close Create Product" : "Create Product"}
-                    </button>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 8, maxWidth: 760 }}>
-                    <input
-                      style={inputStyle}
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      placeholder="Search by name or slug"
-                    />
-                    <select style={inputStyle} value={productSort} onChange={(e) => setProductSort(e.target.value as "newest" | "oldest" | "nameAsc" | "nameDesc")}>
-                      <option value="newest">Newest first</option>
-                      <option value="oldest">Oldest first</option>
-                      <option value="nameAsc">Name A-Z</option>
-                      <option value="nameDesc">Name Z-A</option>
-                    </select>
-                  </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+                  <h2 style={{ fontSize: 20 }}>Products ({products.length}/{products.length})</h2>
+                  <button style={buttonStyle} onClick={() => setShowCreateProductForm((v) => !v)}>
+                    {showCreateProductForm ? "Close Create Product" : "Create Product"}
+                  </button>
                 </div>
                 <ul style={{ display: "grid", gap: 8 }}>
-                  {visibleProducts.map((p) => (
+                  {products.map((p) => (
                     <li key={p.id} style={{ border: `1px solid ${color.border}`, borderRadius: 10, padding: 10, background: color.cardSoft }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 8 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto auto", gap: 8, alignItems: "center" }}>
                         <input style={inputStyle} value={productDrafts[p.id]?.name ?? p.name} onChange={(e) => patchProductDraft(p.id, { name: e.target.value })} />
                         <input style={inputStyle} value={productDrafts[p.id]?.slug ?? p.slug} onChange={(e) => patchProductDraft(p.id, { slug: e.target.value })} />
                         <label style={{ color: color.muted }}>
@@ -698,17 +635,23 @@ export default function AdminPage() {
                           />{" "}
                           Active
                         </label>
+                        <button
+                          style={editingProductId === p.id ? ghostButtonStyle : buttonStyle}
+                          onClick={() => {
+                            setEditingProductId(p.id);
+                            setSelectedProductId(p.id);
+                            setSelectedVariantId("");
+                          }}
+                        >
+                          {editingProductId === p.id ? "Editing" : "Edit"}
+                        </button>
                         <button style={buttonStyle} onClick={() => saveProductInline(p.id)}>
                           Save
                         </button>
                       </div>
-                      <div style={{ fontSize: 13, marginTop: 4, color: color.muted }}>Variants: {p.variants.length}</div>
-                      <div style={{ fontSize: 13, marginTop: 4, color: color.muted }}>
-                        Images: {p.images.length} | Main: {p.images.find((img) => img.isMain)?.path ?? "none"}
-                      </div>
                     </li>
                   ))}
-                  {visibleProducts.length === 0 ? <li style={{ color: color.muted }}>No products found for current filter.</li> : null}
+                  {products.length === 0 ? <li style={{ color: color.muted }}>No products yet.</li> : null}
                 </ul>
               </section>
 
@@ -725,18 +668,10 @@ export default function AdminPage() {
                 </section>
               ) : null}
 
-              <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
-                <h2 style={{ fontSize: 20, marginBottom: 10 }}>Create Promo</h2>
-                <form onSubmit={createPromo} style={{ display: "grid", gap: 8, maxWidth: 560 }}>
-                  <input style={inputStyle} value={newPromoCode} onChange={(e) => setNewPromoCode(e.target.value)} placeholder="Code" />
-                  <button style={buttonStyle} type="submit">
-                    Create 15% Promo
-                  </button>
-                </form>
-              </section>
-
-              <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
-                <h2 style={{ fontSize: 20, marginBottom: 10 }}>Variant / Price / Inventory</h2>
+              {editingProduct ? (
+                <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
+                  <h2 style={{ fontSize: 20, marginBottom: 10 }}>Editing: {editingProduct.name} ({editingProduct.slug})</h2>
+                  <h3 style={{ fontSize: 16, marginBottom: 10, color: color.muted }}>Variant / Price / Inventory</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                   <select style={inputStyle} value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
                     <option value="">Select product</option>
@@ -841,10 +776,12 @@ export default function AdminPage() {
                     Selected: {selectedVariant.sku}, stock {selectedVariant.inventory?.quantity ?? 0}, reserved {selectedVariant.inventory?.reservedQuantity ?? 0}
                   </p>
                 ) : null}
-              </section>
+                </section>
+              ) : null}
 
-              <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
-                <h2 style={{ fontSize: 20, marginBottom: 10 }}>Product Images</h2>
+              {editingProduct ? (
+                <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
+                  <h2 style={{ fontSize: 20, marginBottom: 10 }}>Product Images</h2>
                 <form onSubmit={addImageToProduct} style={{ display: "grid", gap: 8, maxWidth: 580 }}>
                   <input style={inputStyle} value={imagePath} onChange={(e) => setImagePath(e.target.value)} placeholder="/products/your-image.png" />
                   <input style={inputStyle} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="Alt text" />
@@ -857,7 +794,8 @@ export default function AdminPage() {
                   </button>
                 </form>
                 <p style={{ fontSize: 13, marginTop: 8, color: color.muted }}>Selected product: {selectedProduct?.name ?? "not selected"}</p>
-              </section>
+                </section>
+              ) : null}
 
             </>
           ) : null}
