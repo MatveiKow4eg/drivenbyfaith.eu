@@ -60,9 +60,7 @@ body {
   overflow: hidden;
 }
 
-.dbf-product-hero.hero {
-  min-height: 0;
-}
+
 
 .hero::before {
   content: none;
@@ -87,11 +85,7 @@ body {
   background: linear-gradient(180deg, #070707 0%, #040404 58%, #030303 100%);
 }
 
-.dbf-product-hero-copy.hero-copy {
-  min-height: 0;
-  align-items: start;
-  padding: clamp(1.2rem, 2.5vw, 2rem) clamp(1rem, 3vw, 2rem);
-}
+
 
 .hero-copy::before {
   content: "";

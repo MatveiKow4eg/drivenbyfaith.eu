@@ -268,8 +268,8 @@ export default function ProductPage() {
         </div>
       ) : null}
 
-      <section className="hero dbf-product-hero" aria-label="Driven By Faith header">
-        <div className="hero-copy dbf-product-hero-copy">
+      <section className="hero" aria-label="Driven By Faith hero">
+        <div className="hero-copy">
           <div className="hero-logo" aria-label="Driven By Faith logo">
             <span className="hero-logo-top">DRIVEN BY</span>
             <span className="hero-logo-btm">
