@@ -11,13 +11,13 @@ git fetch --all --prune
 git checkout "$BRANCH"
 git pull origin "$BRANCH"
 
-echo "[deploy] Build backend image"
-docker compose -f backend/docker-compose.prod.yml build backend
+echo "[deploy] Build and start backend service"
+docker compose -f backend/docker-compose.prod.yml up -d --build backend
 
 echo "[deploy] Apply Prisma migrations from files"
 docker compose -f backend/docker-compose.prod.yml run --rm backend npx prisma migrate deploy
 
-echo "[deploy] Restart backend service"
+echo "[deploy] Ensure backend is running"
 docker compose -f backend/docker-compose.prod.yml up -d backend
 
 echo "[deploy] Done"
