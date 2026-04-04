@@ -80,7 +80,7 @@ body {
   border-radius: 0;
   overflow: hidden;
   display: grid;
-  align-items: start;
+  align-items: end;
   justify-items: center;
   padding: clamp(1.4rem, 3vw, 2.4rem) clamp(1rem, 3vw, 2rem) clamp(1.4rem, 3vw, 2.4rem);
   isolation: isolate;
