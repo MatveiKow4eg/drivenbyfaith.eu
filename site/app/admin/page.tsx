@@ -73,6 +73,20 @@ function deriveCategoryFromProduct(product: AdminProduct): string {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.drivenbyfaith.eu/api/v1";
+const API_ORIGIN = API_BASE.replace(/\/api\/v1\/?$/, "");
+
+function resolveProductImageSrc(path: string): string {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  if (path.startsWith("/products/")) {
+    return path;
+  }
+  if (path.startsWith("/")) {
+    return `${API_ORIGIN}${path}`;
+  }
+  return `${API_ORIGIN}/${path}`;
+}
 
 const color = {
   bg: "#050505",
@@ -128,6 +142,7 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [promos, setPromos] = useState<AdminPromo[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [brokenImageIds, setBrokenImageIds] = useState<Record<string, boolean>>({});
 
   const [newProductName, setNewProductName] = useState("");
   const [newProductSlug, setNewProductSlug] = useState("");
@@ -204,6 +219,12 @@ export default function AdminPage() {
     } else {
       window.localStorage.removeItem("dbf_admin_token");
     }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    void loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   async function authedRequest(path: string, init?: RequestInit) {
@@ -554,7 +575,8 @@ export default function AdminPage() {
       style={{
         minHeight: "100vh",
         padding: 24,
-        maxWidth: 1240,
+        maxWidth: activeTab === "products" ? "100%" : 1240,
+        width: "100%",
         margin: "0 auto",
         color: color.text,
         background: `radial-gradient(circle at top right, #19191d 0%, ${color.bg} 45%, #020202 100%)`,
@@ -649,7 +671,49 @@ export default function AdminPage() {
                       <ul style={{ display: "grid", gap: 8 }}>
                         {categoryProducts.map((p) => (
                           <li key={p.id} style={{ border: `1px solid ${color.border}`, borderRadius: 10, padding: 10, background: color.card }}>
-                            <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1fr) minmax(360px, 2fr) auto", gap: 10, alignItems: "start" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "128px minmax(260px, 1fr) minmax(360px, 2fr) auto", gap: 12, alignItems: "start" }}>
+                              {(() => {
+                                const mainImage = p.images.find((img) => img.isMain) ?? p.images[0];
+                                if (!mainImage?.path || (mainImage.id && brokenImageIds[mainImage.id])) {
+                                  return (
+                                    <div
+                                      style={{
+                                        width: 120,
+                                        height: 120,
+                                        borderRadius: 10,
+                                        border: `1px solid ${color.border}`,
+                                        background: color.cardSoft,
+                                        color: color.muted,
+                                        display: "grid",
+                                        placeItems: "center",
+                                        fontSize: 12
+                                      }}
+                                    >
+                                      No image
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <img
+                                    src={resolveProductImageSrc(mainImage.path)}
+                                    alt={mainImage.alt ?? p.name}
+                                    onError={() => {
+                                      if (mainImage.id) {
+                                        setBrokenImageIds((prev) => ({ ...prev, [mainImage.id]: true }));
+                                      }
+                                    }}
+                                    style={{
+                                      width: 120,
+                                      height: 120,
+                                      objectFit: "cover",
+                                      borderRadius: 10,
+                                      border: `1px solid ${color.border}`,
+                                      background: color.cardSoft
+                                    }}
+                                  />
+                                );
+                              })()}
                               <div>
                                 <div style={{ fontWeight: 700 }}>{p.name}</div>
                                 <div style={{ fontSize: 12, color: color.muted }}>{p.slug}</div>
