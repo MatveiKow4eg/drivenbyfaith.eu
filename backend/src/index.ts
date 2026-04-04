@@ -4,10 +4,12 @@ import type { Request, Response } from "express";
 import { env } from "./config.js";
 import { checkoutRouter } from "./modules/checkout.routes.js";
 import { productsRouter } from "./modules/products.routes.js";
+import { stripeWebhookRouter } from "./modules/stripe.webhook.routes.js";
 
 const app = express();
 
 app.use(cors({ origin: env.FRONTEND_URL }));
+app.use("/api/v1", express.raw({ type: "application/json" }), stripeWebhookRouter);
 app.use(express.json());
 
 app.get("/health", (_req: Request, res: Response) => {

@@ -1,10 +1,13 @@
-import type { Currency } from "@prisma/client";
 import { Router } from "express";
 import type { Request, Response } from "express";
+import Stripe from "stripe";
 import { z } from "zod";
+import { env } from "../config.js";
 import { prisma } from "../db.js";
 
 const checkoutRouter = Router();
+const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+type CurrencyCode = "EUR" | "USD";
 
 const quoteSchema = z.object({
   currency: z.enum(["EUR", "USD"]),
@@ -20,6 +23,22 @@ const quoteSchema = z.object({
     .min(1)
 });
 
+const sessionSchema = quoteSchema.extend({
+  customer: z.object({
+    email: z.string().email(),
+    fullName: z.string().trim().min(2),
+    address: z.object({
+      line1: z.string().trim().min(2),
+      line2: z.string().trim().optional(),
+      city: z.string().trim().min(2),
+      postalCode: z.string().trim().min(2),
+      countryCode: z.string().trim().length(2).transform((val) => val.toUpperCase())
+    })
+  }),
+  successUrl: z.string().url().optional(),
+  cancelUrl: z.string().url().optional()
+});
+
 function isPriceActive(price: { isActive: boolean; validFrom: Date | null; validTo: Date | null }, now: Date) {
   return price.isActive && (price.validFrom === null || price.validFrom <= now) && (price.validTo === null || price.validTo >= now);
 }
@@ -28,11 +47,11 @@ function calculatePromoDiscount(input: {
   promo: {
     type: "PERCENT" | "FIXED";
     value: number;
-    currency: Currency | null;
+    currency: CurrencyCode | null;
     minOrderAmountMinor: number | null;
     maxDiscountMinor: number | null;
   };
-  currency: Currency;
+  currency: CurrencyCode;
   subtotalMinor: number;
 }) {
   const { promo, currency, subtotalMinor } = input;
@@ -62,14 +81,14 @@ function calculatePromoDiscount(input: {
   return Math.max(0, discountMinor);
 }
 
-checkoutRouter.post("/checkout/quote", async (req: Request, res: Response) => {
-  const parsed = quoteSchema.safeParse(req.body);
+function generateOrderNumber() {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `DBF-${date}-${random}`;
+}
 
-  if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
-  }
-
-  const { currency, countryCode, promoCode, items } = parsed.data;
+async function computeQuote(input: z.infer<typeof quoteSchema>) {
+  const { currency, countryCode, promoCode, items } = input;
   const now = new Date();
 
   const variants = await prisma.productVariant.findMany({
@@ -103,17 +122,17 @@ checkoutRouter.post("/checkout/quote", async (req: Request, res: Response) => {
   for (const item of items) {
     const variant = variantById.get(item.variantId);
     if (!variant) {
-      return res.status(400).json({ message: `Variant not found or inactive: ${item.variantId}` });
+      throw new Error(`Variant not found or inactive: ${item.variantId}`);
     }
 
     const price = variant.prices.find((p) => p.currency === currency && isPriceActive(p, now));
     if (!price) {
-      return res.status(400).json({ message: `No active ${currency} price for variant ${variant.id}` });
+      throw new Error(`No active ${currency} price for variant ${variant.id}`);
     }
 
     const availableStock = variant.inventory ? Math.max(0, variant.inventory.quantity - variant.inventory.reservedQuantity) : 0;
     if (availableStock < item.qty) {
-      return res.status(400).json({ message: `Not enough stock for variant ${variant.id}`, availableStock });
+      throw new Error(`Not enough stock for variant ${variant.id}`);
     }
 
     lineItems.push({
@@ -134,6 +153,7 @@ checkoutRouter.post("/checkout/quote", async (req: Request, res: Response) => {
 
   let discountMinor = 0;
   let appliedPromoCode: string | null = null;
+  let appliedPromoCodeId: string | null = null;
 
   if (promoCode) {
     const normalizedCode = promoCode.trim().toUpperCase();
@@ -147,11 +167,11 @@ checkoutRouter.post("/checkout/quote", async (req: Request, res: Response) => {
     });
 
     if (!promo) {
-      return res.status(400).json({ message: "Promo code is invalid or expired" });
+      throw new Error("Promo code is invalid or expired");
     }
 
     if (promo.usageLimit !== null && promo.usedCount >= promo.usageLimit) {
-      return res.status(400).json({ message: "Promo code usage limit reached" });
+      throw new Error("Promo code usage limit reached");
     }
 
     discountMinor = calculatePromoDiscount({
@@ -167,6 +187,7 @@ checkoutRouter.post("/checkout/quote", async (req: Request, res: Response) => {
     });
 
     appliedPromoCode = promo.code;
+    appliedPromoCodeId = promo.id;
   }
 
   const discountedSubtotalMinor = Math.max(0, subtotalMinor - discountMinor);
@@ -179,7 +200,7 @@ checkoutRouter.post("/checkout/quote", async (req: Request, res: Response) => {
   });
 
   if (!zone) {
-    return res.status(400).json({ message: `Shipping unavailable for country: ${countryCode}` });
+    throw new Error(`Shipping unavailable for country: ${countryCode}`);
   }
 
   const shippingRate = await prisma.shippingRate.findFirst({
@@ -194,28 +215,152 @@ checkoutRouter.post("/checkout/quote", async (req: Request, res: Response) => {
   });
 
   if (!shippingRate) {
-    return res.status(400).json({
-      message: `No shipping rate for ${countryCode} with ${currency} subtotal ${discountedSubtotalMinor}`
-    });
+    throw new Error(`No shipping rate for ${countryCode} with ${currency} subtotal ${discountedSubtotalMinor}`);
   }
 
   const shippingMinor = shippingRate.amountMinor;
   const totalMinor = discountedSubtotalMinor + shippingMinor;
 
-  return res.status(200).json({
+  return {
     currency,
     countryCode,
-    pricingSource: "database",
-    items: lineItems,
+    lineItems,
     subtotalMinor,
     discountMinor,
     shippingMinor,
     totalMinor,
     promoCode: appliedPromoCode,
+    promoCodeId: appliedPromoCodeId,
     shippingEstimateDays: {
       min: shippingRate.estimatedDaysMin,
       max: shippingRate.estimatedDaysMax
     }
+  };
+}
+
+checkoutRouter.post("/checkout/quote", async (req: Request, res: Response) => {
+  const parsed = quoteSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
+  }
+
+  let quote: Awaited<ReturnType<typeof computeQuote>>;
+
+  try {
+    quote = await computeQuote(parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to compute quote";
+    return res.status(400).json({ message });
+  }
+
+  return res.status(200).json({
+    currency: quote.currency,
+    countryCode: quote.countryCode,
+    pricingSource: "database",
+    items: quote.lineItems,
+    subtotalMinor: quote.subtotalMinor,
+    discountMinor: quote.discountMinor,
+    shippingMinor: quote.shippingMinor,
+    totalMinor: quote.totalMinor,
+    promoCode: quote.promoCode,
+    shippingEstimateDays: quote.shippingEstimateDays
+  });
+});
+
+checkoutRouter.post("/checkout/session", async (req: Request, res: Response) => {
+  const parsed = sessionSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
+  }
+
+  let quote: Awaited<ReturnType<typeof computeQuote>>;
+
+  try {
+    quote = await computeQuote(parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to compute quote";
+    return res.status(400).json({ message });
+  }
+
+  const { customer, successUrl, cancelUrl } = parsed.data;
+
+  const order = await prisma.order.create({
+    data: {
+      orderNumber: generateOrderNumber(),
+      status: "PENDING",
+      currency: quote.currency,
+      subtotalMinor: quote.subtotalMinor,
+      discountMinor: quote.discountMinor,
+      shippingMinor: quote.shippingMinor,
+      totalMinor: quote.totalMinor,
+      email: customer.email,
+      fullName: customer.fullName,
+      addressJson: customer.address,
+      countryCode: quote.countryCode,
+      promoCodeId: quote.promoCodeId,
+      items: {
+        create: quote.lineItems.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          sku: item.sku,
+          nameSnapshot: item.name,
+          sizeSnapshot: item.size,
+          colorSnapshot: item.color,
+          unitPriceMinor: item.unitPriceMinor,
+          qty: item.qty,
+          lineTotalMinor: item.lineTotalMinor
+        }))
+      }
+    }
+  });
+
+  const stripeSession = await stripe.checkout.sessions.create({
+    mode: "payment",
+    success_url: successUrl ?? `${env.FRONTEND_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: cancelUrl ?? `${env.FRONTEND_URL}/checkout/cancel`,
+    customer_email: customer.email,
+    metadata: {
+      orderId: order.id,
+      orderNumber: order.orderNumber
+    },
+    line_items: [
+      ...quote.lineItems.map((item) => ({
+        quantity: item.qty,
+        price_data: {
+          currency: quote.currency.toLowerCase(),
+          unit_amount: item.unitPriceMinor,
+          product_data: {
+            name: `${item.name} (${item.size} / ${item.color})`
+          }
+        }
+      })),
+      {
+        quantity: 1,
+        price_data: {
+          currency: quote.currency.toLowerCase(),
+          unit_amount: quote.shippingMinor,
+          product_data: {
+            name: `Shipping (${quote.countryCode})`
+          }
+        }
+      }
+    ]
+  });
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      stripeCheckoutSessionId: stripeSession.id
+    }
+  });
+
+  return res.status(200).json({
+    checkoutUrl: stripeSession.url,
+    sessionId: stripeSession.id,
+    orderId: order.id,
+    orderNumber: order.orderNumber
   });
 });
 
