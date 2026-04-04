@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Bebas_Neue, Sora } from "next/font/google";
+import { Chakra_Petch, Teko } from "next/font/google";
 import "./globals.css";
 
-const headline = Bebas_Neue({
+const headline = Teko({
   subsets: ["latin"],
-  weight: "400",
+  weight: ["500", "600", "700"],
   variable: "--font-headline",
 });
 
-const body = Sora({
+const body = Chakra_Petch({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
   variable: "--font-body",

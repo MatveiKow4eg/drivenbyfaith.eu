@@ -47,11 +47,23 @@ export default function Home() {
 
       <section className="hero" aria-label="Driven By Faith hero">
         <div className="hero-copy">
-          <img src="/hero.png" alt="Driven By Faith" className="hero-brand-img" />
+          <div className="hero-logo" aria-label="Driven By Faith logo">
+            <span className="hero-logo-top">DRIVEN BY</span>
+            <span className="hero-logo-btm">
+              {"FAITH".split("").map((l, i) => <span key={i}>{l}</span>)}
+            </span>
+          </div>
+          <nav className="hero-nav" aria-label="Main navigation">
+            <a href="#scents">Shop</a>
+            <a href="#scents">New</a>
+            <a href="#contact">Community</a>
+            <a href="#contact">Contact</a>
+          </nav>
+          <h1>Driven by faith</h1>
         </div>
       </section>
 
-      <section ref={productsRef} className="product-selection" aria-label="Select a scent">
+      <section id="scents" ref={productsRef} className="product-selection" aria-label="Select a scent">
         {PRODUCTS.map((product) => (
           <article
             key={product.id}
@@ -72,25 +84,7 @@ export default function Home() {
         ))}
       </section>
 
-      <section className="emotional-text" aria-label="Brand message">
-        <div className="flowing-light" aria-hidden="true" />
-        <p>SMELL IS MEMORY</p>
-        <p>DRIVE IS EMOTION</p>
-        <p>FAITH IS POWER</p>
-      </section>
-
-      <section className="social-proof" aria-label="Social proof">
-        <p className="proof-title">60+ DRIVERS CHOSE THIS</p>
-        <div className="proof-avatars" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-      </section>
-
-      <footer className="art-footer">
+      <footer id="contact" className="art-footer">
         <p className="footer-brand">DRIVEN BY FAITH</p>
         <div className="footer-links">
           <a href="#" aria-label="Instagram">
