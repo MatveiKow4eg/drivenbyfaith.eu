@@ -2,6 +2,8 @@ import cors from "cors";
 import express from "express";
 import type { Request, Response } from "express";
 import { env } from "./config.js";
+import { checkoutRouter } from "./modules/checkout.routes.js";
+import { productsRouter } from "./modules/products.routes.js";
 
 const app = express();
 
@@ -18,6 +20,14 @@ app.get("/api/v1/meta", (_req: Request, res: Response) => {
     checkoutMode: "guest",
     pricingSource: "database"
   });
+});
+
+app.use("/api/v1", productsRouter);
+app.use("/api/v1", checkoutRouter);
+
+app.use((err: unknown, _req: Request, res: Response, _next: unknown) => {
+  console.error("Unhandled error", err);
+  res.status(500).json({ message: "Internal server error" });
 });
 
 app.listen(env.PORT, () => {
