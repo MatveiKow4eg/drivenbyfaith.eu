@@ -629,6 +629,10 @@ body {
   margin-top: 0;
 }
 
+.dbf-product-page .hero-copy {
+  min-height: 60vh;
+}
+
 
 
 .dbf-product-control-card {
