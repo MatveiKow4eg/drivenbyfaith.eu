@@ -35,6 +35,7 @@ const createAdminUserSchema = z.object({
 const createProductSchema = z.object({
   slug: z.string().trim().min(2),
   name: z.string().trim().min(2),
+  category: z.string().trim().min(2).optional(),
   description: z.string().trim().optional(),
   isActive: z.boolean().optional()
 });
@@ -42,6 +43,7 @@ const createProductSchema = z.object({
 const updateProductSchema = z.object({
   slug: z.string().trim().min(2).optional(),
   name: z.string().trim().min(2).optional(),
+  category: z.string().trim().min(2).optional(),
   description: z.string().trim().optional(),
   isActive: z.boolean().optional()
 });
@@ -302,6 +304,7 @@ adminRouter.post("/admin/products", requireAdmin, async (req: AuthenticatedReque
     data: {
       slug: parsed.data.slug,
       name: parsed.data.name,
+      category: parsed.data.category ?? "General",
       description: parsed.data.description,
       isActive: parsed.data.isActive ?? true
     }
@@ -334,6 +337,7 @@ adminRouter.patch("/admin/products/:id", requireAdmin, async (req: Authenticated
     data: {
       slug: parsed.data.slug,
       name: parsed.data.name,
+      category: parsed.data.category,
       description: parsed.data.description,
       isActive: parsed.data.isActive
     }

@@ -28,11 +28,13 @@ async function seedProductAndVariants() {
     where: { slug: "faith-core-tee" },
     update: {
       name: "Faith Core Tee",
+      category: "T-Shirts",
       description: "Heavyweight cotton t-shirt. Sizes S-XXXL."
     },
     create: {
       slug: "faith-core-tee",
       name: "Faith Core Tee",
+      category: "T-Shirts",
       description: "Heavyweight cotton t-shirt. Sizes S-XXXL.",
       isActive: true
     }

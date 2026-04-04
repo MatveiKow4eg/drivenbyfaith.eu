@@ -45,6 +45,7 @@ model Product {
   id          String           @id @default(cuid())
   slug        String           @unique
   name        String
+  category    String           @default("General")
   description String?
   isActive    Boolean          @default(true)
   createdAt   DateTime         @default(now())

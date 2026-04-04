@@ -8,6 +8,8 @@ type AdminProduct = {
   id: string;
   slug: string;
   name: string;
+  category?: string | null;
+  description?: string | null;
   isActive: boolean;
   images: Array<{
     id: string;
@@ -64,6 +66,11 @@ type MeResponse = {
 type VariantSize = "S" | "M" | "L" | "XL" | "XXL" | "XXXL";
 type AdminTab = "products" | "orders" | "promos" | "users";
 type Toast = { id: number; text: string; kind: "success" | "error" };
+
+function deriveCategoryFromProduct(product: AdminProduct): string {
+  const fromDb = product.category?.trim();
+  return fromDb && fromDb.length > 0 ? fromDb : "General";
+}
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.drivenbyfaith.eu/api/v1";
 
@@ -124,6 +131,7 @@ export default function AdminPage() {
 
   const [newProductName, setNewProductName] = useState("");
   const [newProductSlug, setNewProductSlug] = useState("");
+  const [newProductCategory, setNewProductCategory] = useState("General");
   const [showCreateProductForm, setShowCreateProductForm] = useState(false);
   const [editingProductId, setEditingProductId] = useState("");
 
@@ -160,6 +168,17 @@ export default function AdminPage() {
     [selectedProduct, selectedVariantId]
   );
   const editingProduct = useMemo(() => products.find((p) => p.id === editingProductId) ?? null, [products, editingProductId]);
+  const activeProducts = useMemo(() => products.filter((p) => p.isActive), [products]);
+  const activeProductsByCategory = useMemo(() => {
+    const groups = new Map<string, AdminProduct[]>();
+    for (const product of activeProducts) {
+      const category = deriveCategoryFromProduct(product);
+      const current = groups.get(category) ?? [];
+      current.push(product);
+      groups.set(category, current);
+    }
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [activeProducts]);
   const visibleOrders = useMemo(
     () => orders.filter((o) => (orderFilter === "ALL" ? true : o.status === orderFilter)),
     [orders, orderFilter]
@@ -306,6 +325,7 @@ export default function AdminPage() {
       body: JSON.stringify({
         name: newProductName,
         slug: newProductSlug,
+        category: newProductCategory,
         description: "Created from admin panel",
         isActive: true
       })
@@ -320,6 +340,7 @@ export default function AdminPage() {
 
     setNewProductName("");
     setNewProductSlug("");
+    setNewProductCategory("General");
     setShowCreateProductForm(false);
     pushToast("Product created", "success");
     await loadAll();
@@ -616,43 +637,42 @@ export default function AdminPage() {
             <>
               <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-                  <h2 style={{ fontSize: 20 }}>Products ({products.length}/{products.length})</h2>
+                  <h2 style={{ fontSize: 20 }}>Products ({activeProducts.length}/{activeProducts.length})</h2>
                   <button style={buttonStyle} onClick={() => setShowCreateProductForm((v) => !v)}>
                     {showCreateProductForm ? "Close Create Product" : "Create Product"}
                   </button>
                 </div>
-                <ul style={{ display: "grid", gap: 8 }}>
-                  {products.map((p) => (
-                    <li key={p.id} style={{ border: `1px solid ${color.border}`, borderRadius: 10, padding: 10, background: color.cardSoft }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto auto", gap: 8, alignItems: "center" }}>
-                        <input style={inputStyle} value={productDrafts[p.id]?.name ?? p.name} onChange={(e) => patchProductDraft(p.id, { name: e.target.value })} />
-                        <input style={inputStyle} value={productDrafts[p.id]?.slug ?? p.slug} onChange={(e) => patchProductDraft(p.id, { slug: e.target.value })} />
-                        <label style={{ color: color.muted }}>
-                          <input
-                            checked={productDrafts[p.id]?.isActive ?? p.isActive}
-                            onChange={(e) => patchProductDraft(p.id, { isActive: e.target.checked })}
-                            type="checkbox"
-                          />{" "}
-                          Active
-                        </label>
-                        <button
-                          style={editingProductId === p.id ? ghostButtonStyle : buttonStyle}
-                          onClick={() => {
-                            setEditingProductId(p.id);
-                            setSelectedProductId(p.id);
-                            setSelectedVariantId("");
-                          }}
-                        >
-                          {editingProductId === p.id ? "Editing" : "Edit"}
-                        </button>
-                        <button style={buttonStyle} onClick={() => saveProductInline(p.id)}>
-                          Save
-                        </button>
-                      </div>
-                    </li>
+                <div style={{ display: "grid", gap: 14 }}>
+                  {activeProductsByCategory.map(([category, categoryProducts]) => (
+                    <section key={category} style={{ border: `1px solid ${color.border}`, borderRadius: 12, padding: 10, background: color.cardSoft }}>
+                      <h3 style={{ marginBottom: 8, color: "#fff" }}>{category}</h3>
+                      <ul style={{ display: "grid", gap: 8 }}>
+                        {categoryProducts.map((p) => (
+                          <li key={p.id} style={{ border: `1px solid ${color.border}`, borderRadius: 10, padding: 10, background: color.card }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1fr) minmax(360px, 2fr) auto", gap: 10, alignItems: "start" }}>
+                              <div>
+                                <div style={{ fontWeight: 700 }}>{p.name}</div>
+                                <div style={{ fontSize: 12, color: color.muted }}>{p.slug}</div>
+                              </div>
+                              <div style={{ color: color.text }}>{p.description?.trim() ? p.description : "No description"}</div>
+                              <button
+                                style={editingProductId === p.id ? ghostButtonStyle : buttonStyle}
+                                onClick={() => {
+                                  setEditingProductId(p.id);
+                                  setSelectedProductId(p.id);
+                                  setSelectedVariantId("");
+                                }}
+                              >
+                                {editingProductId === p.id ? "Editing" : "Edit"}
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
                   ))}
-                  {products.length === 0 ? <li style={{ color: color.muted }}>No products yet.</li> : null}
-                </ul>
+                  {activeProducts.length === 0 ? <p style={{ color: color.muted }}>No active products yet.</p> : null}
+                </div>
               </section>
 
               {showCreateProductForm ? (
@@ -661,6 +681,7 @@ export default function AdminPage() {
                   <form onSubmit={createProduct} style={{ display: "grid", gap: 8, maxWidth: 560 }}>
                     <input style={inputStyle} value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="Name" />
                     <input style={inputStyle} value={newProductSlug} onChange={(e) => setNewProductSlug(e.target.value)} placeholder="Slug" />
+                    <input style={inputStyle} value={newProductCategory} onChange={(e) => setNewProductCategory(e.target.value)} placeholder="Category" />
                     <button style={buttonStyle} type="submit">
                       Create
                     </button>
