@@ -1,4 +1,4 @@
-import { Currency, PromoType } from "@prisma/client";
+import type { Currency } from "@prisma/client";
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { z } from "zod";
@@ -26,7 +26,7 @@ function isPriceActive(price: { isActive: boolean; validFrom: Date | null; valid
 
 function calculatePromoDiscount(input: {
   promo: {
-    type: PromoType;
+    type: "PERCENT" | "FIXED";
     value: number;
     currency: Currency | null;
     minOrderAmountMinor: number | null;
@@ -47,7 +47,7 @@ function calculatePromoDiscount(input: {
 
   let discountMinor = 0;
 
-  if (promo.type === PromoType.PERCENT) {
+  if (promo.type === "PERCENT") {
     discountMinor = Math.floor((subtotalMinor * promo.value) / 100);
   } else {
     discountMinor = promo.value;
