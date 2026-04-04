@@ -59,7 +59,7 @@ const createVariantSchema = z.object({
   productId: z.string().min(1),
   size: z.enum(["S", "M", "L", "XL", "XXL", "XXXL"]),
   color: z.string().trim().min(2),
-  sku: z.string().trim().min(2),
+  sku: z.string().trim().min(2).optional(),
   isActive: z.boolean().optional(),
   inventoryQty: z.number().int().min(0).default(0),
   priceEURMinor: z.number().int().positive()
@@ -106,6 +106,26 @@ function signAdminToken(payload: { id: string; email: string; role: AdminRole })
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function skuToken(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+}
+
+async function buildVariantSku(productId: string, size: VariantSize, color: string) {
+  const product = await prisma.product.findUnique({ where: { id: productId }, select: { slug: true } });
+  if (!product) {
+    throw new Error("Product not found for variant SKU generation");
+  }
+
+  const baseSku = [skuToken(product.slug), skuToken(size), skuToken(color)].filter(Boolean).join("-");
+  const existing = await prisma.productVariant.count({ where: { sku: baseSku } });
+  return existing === 0 ? baseSku : `${baseSku}-${Date.now().toString().slice(-4)}`;
 }
 
 function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -397,12 +417,14 @@ adminRouter.post("/admin/variants", requireAdmin, async (req: AuthenticatedReque
     return res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
   }
 
+  const sku = parsed.data.sku ?? (await buildVariantSku(parsed.data.productId, parsed.data.size as VariantSize, parsed.data.color));
+
   const created = await prisma.productVariant.create({
     data: {
       productId: parsed.data.productId,
       size: parsed.data.size as VariantSize,
       color: parsed.data.color,
-      sku: parsed.data.sku,
+      sku,
       isActive: parsed.data.isActive ?? true
     }
   });

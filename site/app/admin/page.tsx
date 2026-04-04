@@ -66,6 +66,7 @@ type MeResponse = {
 type VariantSize = "S" | "M" | "L" | "XL" | "XXL" | "XXXL";
 type AdminTab = "products" | "orders" | "promos" | "users";
 type Toast = { id: number; text: string; kind: "success" | "error" };
+type ProductDraft = { name: string; slug: string; category: string; description: string; isActive: boolean };
 const SIZE_OPTIONS: readonly VariantSize[] = ["S", "M", "L", "XL", "XXL", "XXXL"];
 
 function deriveCategoryFromProduct(product: AdminProduct): string {
@@ -130,6 +131,12 @@ const ghostButtonStyle: CSSProperties = {
   cursor: "pointer"
 };
 
+const textareaStyle: CSSProperties = {
+  ...inputStyle,
+  minHeight: 96,
+  resize: "vertical"
+};
+
 export default function AdminPage() {
   const [token, setToken] = useState("");
   const [activeTab, setActiveTab] = useState<AdminTab>("products");
@@ -160,7 +167,6 @@ export default function AdminPage() {
 
   const [variantSize, setVariantSize] = useState<VariantSize>("M");
   const [variantColor, setVariantColor] = useState("Black");
-  const [variantSku, setVariantSku] = useState("");
   const [variantInventory, setVariantInventory] = useState(20);
   const [variantEur, setVariantEur] = useState(3900);
   const [variantIsActive, setVariantIsActive] = useState(true);
@@ -172,7 +178,7 @@ export default function AdminPage() {
 
   const [orderFilter, setOrderFilter] = useState<AdminOrder["status"] | "ALL">("ALL");
 
-  const [productDrafts, setProductDrafts] = useState<Record<string, { name: string; slug: string; isActive: boolean }>>({});
+  const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>({});
   const [promoDrafts, setPromoDrafts] = useState<
     Record<string, { code: string; type: "PERCENT" | "FIXED"; value: number; isActive: boolean }>
   >({});
@@ -183,17 +189,23 @@ export default function AdminPage() {
     [selectedProduct, selectedVariantId]
   );
   const editingProduct = useMemo(() => products.find((p) => p.id === editingProductId) ?? null, [products, editingProductId]);
+  const editingProductDraft = useMemo<ProductDraft | null>(() => {
+    if (!editingProduct) return null;
+    return (
+      productDrafts[editingProduct.id] ?? {
+        name: editingProduct.name,
+        slug: editingProduct.slug,
+        category: editingProduct.category?.trim() || "General",
+        description: editingProduct.description?.trim() || "",
+        isActive: editingProduct.isActive
+      }
+    );
+  }, [editingProduct, productDrafts]);
   const activeProducts = useMemo(() => products.filter((p) => p.isActive), [products]);
-  const activeProductsByCategory = useMemo(() => {
-    const groups = new Map<string, AdminProduct[]>();
-    for (const product of activeProducts) {
-      const category = deriveCategoryFromProduct(product);
-      const current = groups.get(category) ?? [];
-      current.push(product);
-      groups.set(category, current);
-    }
-    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [activeProducts]);
+  const activeProductsSorted = useMemo(
+    () => [...activeProducts].sort((a, b) => `${deriveCategoryFromProduct(a)} ${a.name}`.localeCompare(`${deriveCategoryFromProduct(b)} ${b.name}`)),
+    [activeProducts]
+  );
   const visibleOrders = useMemo(
     () => orders.filter((o) => (orderFilter === "ALL" ? true : o.status === orderFilter)),
     [orders, orderFilter]
@@ -297,7 +309,18 @@ export default function AdminPage() {
     setPromos(promosData);
     setUsers(usersData);
     setProductDrafts(
-      Object.fromEntries(productsData.map((p) => [p.id, { name: p.name, slug: p.slug, isActive: p.isActive }]))
+      Object.fromEntries(
+        productsData.map((p) => [
+          p.id,
+          {
+            name: p.name,
+            slug: p.slug,
+            category: p.category?.trim() || "General",
+            description: p.description?.trim() || "",
+            isActive: p.isActive
+          }
+        ])
+      )
     );
     setPromoDrafts(
       Object.fromEntries(promosData.map((p) => [p.id, { code: p.code, type: p.type, value: p.value, isActive: p.isActive }]))
@@ -317,11 +340,11 @@ export default function AdminPage() {
     pushToast("Signed out", "success");
   }
 
-  function patchProductDraft(id: string, patch: Partial<{ name: string; slug: string; isActive: boolean }>) {
+  function patchProductDraft(id: string, patch: Partial<ProductDraft>) {
     setProductDrafts((prev) => ({
       ...prev,
       [id]: {
-        ...(prev[id] ?? { name: "", slug: "", isActive: true }),
+        ...(prev[id] ?? { name: "", slug: "", category: "General", description: "", isActive: true }),
         ...patch
       }
     }));
@@ -448,7 +471,6 @@ export default function AdminPage() {
         productId: selectedProductId,
         size: variantSize,
         color: variantColor,
-        sku: variantSku,
         inventoryQty: variantInventory,
         priceEURMinor: variantEur,
         isActive: true
@@ -461,7 +483,6 @@ export default function AdminPage() {
       return;
     }
 
-    setVariantSku("");
     pushToast("Variant created", "success");
     await loadAll();
   }
@@ -475,7 +496,6 @@ export default function AdminPage() {
       body: JSON.stringify({
         size: variantSize,
         color: variantColor,
-        sku: variantSku,
         isActive: variantIsActive
       })
     });
@@ -655,93 +675,52 @@ export default function AdminPage() {
           </section>
 
           {activeTab === "products" ? (
-            <>
-              <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-                  <h2 style={{ fontSize: 20 }}>Products ({activeProducts.length}/{activeProducts.length})</h2>
+            <section
+              style={{
+                marginTop: 18,
+                display: "grid",
+                gridTemplateColumns: editingProduct ? "minmax(0, 1.7fr) minmax(360px, 460px)" : "1fr",
+                gap: 18,
+                alignItems: "start"
+              }}
+            >
+              <div style={{ border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, overflow: "hidden" }}>
+                <div
+                  style={{
+                    padding: 16,
+                    borderBottom: `1px solid ${color.border}`,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    position: "sticky",
+                    top: 0,
+                    background: color.card,
+                    zIndex: 2
+                  }}
+                >
+                  <div>
+                    <h2 style={{ fontSize: 22, color: "#fff", marginBottom: 4 }}>Products</h2>
+                    <p style={{ color: color.muted, fontSize: 13 }}>{activeProducts.length} active products. Simple list on the left, focused editor on the right.</p>
+                  </div>
                   <button style={buttonStyle} onClick={() => setShowCreateProductForm((v) => !v)}>
-                    {showCreateProductForm ? "Close Create Product" : "Create Product"}
+                    {showCreateProductForm ? "Close" : "Create Product"}
                   </button>
                 </div>
-                <div style={{ display: "grid", gap: 14 }}>
-                  {activeProductsByCategory.map(([category, categoryProducts]) => (
-                    <section key={category} style={{ border: `1px solid ${color.border}`, borderRadius: 12, padding: 10, background: color.cardSoft }}>
-                      <h3 style={{ marginBottom: 8, color: "#fff" }}>{category}</h3>
-                      <ul style={{ display: "grid", gap: 8 }}>
-                        {categoryProducts.map((p) => (
-                          <li key={p.id} style={{ border: `1px solid ${color.border}`, borderRadius: 10, padding: 10, background: color.card }}>
-                            <div style={{ display: "grid", gridTemplateColumns: "128px minmax(260px, 1fr) minmax(360px, 2fr) auto", gap: 12, alignItems: "start" }}>
-                              {(() => {
-                                const mainImage = p.images.find((img) => img.isMain) ?? p.images[0];
-                                if (!mainImage?.path || (mainImage.id && brokenImageIds[mainImage.id])) {
-                                  return (
-                                    <div
-                                      style={{
-                                        width: 120,
-                                        height: 120,
-                                        borderRadius: 10,
-                                        border: `1px solid ${color.border}`,
-                                        background: color.cardSoft,
-                                        color: color.muted,
-                                        display: "grid",
-                                        placeItems: "center",
-                                        fontSize: 12
-                                      }}
-                                    >
-                                      No image
-                                    </div>
-                                  );
-                                }
 
-                                return (
-                                  <img
-                                    src={resolveProductImageSrc(mainImage.path)}
-                                    alt={mainImage.alt ?? p.name}
-                                    onError={() => {
-                                      if (mainImage.id) {
-                                        setBrokenImageIds((prev) => ({ ...prev, [mainImage.id]: true }));
-                                      }
-                                    }}
-                                    style={{
-                                      width: 120,
-                                      height: 120,
-                                      objectFit: "cover",
-                                      borderRadius: 10,
-                                      border: `1px solid ${color.border}`,
-                                      background: color.cardSoft
-                                    }}
-                                  />
-                                );
-                              })()}
-                              <div>
-                                <div style={{ fontWeight: 700 }}>{p.name}</div>
-                                <div style={{ fontSize: 12, color: color.muted }}>{p.slug}</div>
-                              </div>
-                              <div style={{ color: color.text }}>{p.description?.trim() ? p.description : "No description"}</div>
-                              <button
-                                style={editingProductId === p.id ? ghostButtonStyle : buttonStyle}
-                                onClick={() => {
-                                  setEditingProductId(p.id);
-                                  setSelectedProductId(p.id);
-                                  setSelectedVariantId("");
-                                }}
-                              >
-                                {editingProductId === p.id ? "Editing" : "Edit"}
-                              </button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
-                  {activeProducts.length === 0 ? <p style={{ color: color.muted }}>No active products yet.</p> : null}
-                </div>
-              </section>
-
-              {showCreateProductForm ? (
-                <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
-                  <h2 style={{ fontSize: 20, marginBottom: 10 }}>Create Product</h2>
-                  <form onSubmit={createProduct} style={{ display: "grid", gap: 8, maxWidth: 560 }}>
+                {showCreateProductForm ? (
+                  <form
+                    onSubmit={createProduct}
+                    style={{
+                      padding: 16,
+                      borderBottom: `1px solid ${color.border}`,
+                      display: "grid",
+                      gridTemplateColumns: "minmax(180px, 1.2fr) minmax(180px, 1fr) minmax(160px, 1fr) auto",
+                      gap: 10,
+                      alignItems: "center"
+                    }}
+                  >
                     <input style={inputStyle} value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="Name" />
                     <input style={inputStyle} value={newProductSlug} onChange={(e) => setNewProductSlug(e.target.value)} placeholder="Slug" />
                     <input style={inputStyle} value={newProductCategory} onChange={(e) => setNewProductCategory(e.target.value)} placeholder="Category" />
@@ -749,133 +728,293 @@ export default function AdminPage() {
                       Create
                     </button>
                   </form>
-                </section>
-              ) : null}
-
-              {editingProduct ? (
-                <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
-                  <h2 style={{ fontSize: 20, marginBottom: 10 }}>Editing: {editingProduct.name} ({editingProduct.slug})</h2>
-                  <h3 style={{ fontSize: 16, marginBottom: 10, color: color.muted }}>Variant / Price / Inventory</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                  <select style={inputStyle} value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
-                    <option value="">Select product</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.slug})
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    style={inputStyle}
-                    value={selectedVariantId}
-                    onChange={(e) => {
-                      const variantId = e.target.value;
-                      setSelectedVariantId(variantId);
-                      const variant = selectedProduct?.variants.find((v) => v.id === variantId);
-                      if (variant) {
-                        const eur = variant.prices.find((p) => p.currency === "EUR" && p.isActive);
-                        setVariantEur(eur?.amountMinor ?? 3900);
-                        setVariantInventory(variant.inventory?.quantity ?? 0);
-                        setVariantSku(variant.sku);
-                        setVariantColor(variant.color);
-                        setVariantSize(variant.size as VariantSize);
-                        setVariantIsActive(variant.isActive);
-                      }
-                    }}
-                  >
-                    <option value="">Select variant</option>
-                    {selectedProduct?.variants.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.sku} ({v.size}/{v.color})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
-                  <form onSubmit={createVariant} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
-                    <strong>Create Variant</strong>
-                    <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
-                      {SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                    <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
-                    <input style={inputStyle} value={variantSku} onChange={(e) => setVariantSku(e.target.value)} placeholder="SKU" />
-                    <input style={inputStyle} value={variantInventory} onChange={(e) => setVariantInventory(Number(e.target.value) || 0)} type="number" />
-                    <input style={inputStyle} value={variantEur} onChange={(e) => setVariantEur(Number(e.target.value) || 0)} type="number" />
-                    <button style={buttonStyle} type="submit">
-                      Create Variant
-                    </button>
-                  </form>
-
-                  <form onSubmit={updateSelectedVariantMeta} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
-                    <strong>Edit Variant Meta</strong>
-                    <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
-                      {SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                    <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
-                    <input style={inputStyle} value={variantSku} onChange={(e) => setVariantSku(e.target.value)} placeholder="SKU" />
-                    <label style={{ color: color.muted }}>
-                      <input checked={variantIsActive} onChange={(e) => setVariantIsActive(e.target.checked)} type="checkbox" /> Active
-                    </label>
-                    <button style={buttonStyle} type="submit">
-                      Save Variant Meta
-                    </button>
-                  </form>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start", marginTop: 12 }}>
-                  <form onSubmit={updateSelectedVariantPrices} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
-                    <strong>Update Price (EUR)</strong>
-                    <input style={inputStyle} value={variantEur} onChange={(e) => setVariantEur(Number(e.target.value) || 0)} type="number" />
-                    <button style={buttonStyle} type="submit">
-                      Save EUR Price
-                    </button>
-                  </form>
-
-                  <form onSubmit={updateSelectedVariantInventory} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
-                    <strong>Update Inventory</strong>
-                    <input style={inputStyle} value={variantInventory} onChange={(e) => setVariantInventory(Number(e.target.value) || 0)} type="number" />
-                    <button style={buttonStyle} type="submit">
-                      Save Inventory
-                    </button>
-                  </form>
-                </div>
-
-                {selectedVariant ? (
-                  <p style={{ marginTop: 10, fontSize: 13, color: color.muted }}>
-                    Selected: {selectedVariant.sku}, stock {selectedVariant.inventory?.quantity ?? 0}, reserved {selectedVariant.inventory?.reservedQuantity ?? 0}
-                  </p>
                 ) : null}
-                </section>
-              ) : null}
 
-              {editingProduct ? (
-                <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
-                  <h2 style={{ fontSize: 20, marginBottom: 10 }}>Product Images</h2>
-                <form onSubmit={addImageToProduct} style={{ display: "grid", gap: 8, maxWidth: 580 }}>
-                  <input style={inputStyle} value={imagePath} onChange={(e) => setImagePath(e.target.value)} placeholder="/products/your-image.png" />
-                  <input style={inputStyle} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="Alt text" />
-                  <input style={inputStyle} value={imageSortOrder} onChange={(e) => setImageSortOrder(Number(e.target.value) || 0)} type="number" />
-                  <label style={{ color: color.muted }}>
-                    <input checked={imageIsMain} onChange={(e) => setImageIsMain(e.target.checked)} type="checkbox" /> Set as main image
-                  </label>
-                  <button style={buttonStyle} type="submit">
-                    Attach Image to Selected Product
-                  </button>
-                </form>
-                <p style={{ fontSize: 13, marginTop: 8, color: color.muted }}>Selected product: {selectedProduct?.name ?? "not selected"}</p>
-                </section>
-              ) : null}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "112px minmax(180px, 1.1fr) minmax(140px, 0.9fr) minmax(260px, 1.6fr) minmax(140px, 0.9fr) auto",
+                    gap: 12,
+                    padding: "12px 16px",
+                    fontSize: 12,
+                    color: color.muted,
+                    borderBottom: `1px solid ${color.border}`,
+                    letterSpacing: 0.3,
+                    textTransform: "uppercase"
+                  }}
+                >
+                  <span>Image</span>
+                  <span>Name</span>
+                  <span>Category</span>
+                  <span>Description</span>
+                  <span>Variants</span>
+                  <span></span>
+                </div>
 
-            </>
+                <div style={{ display: "grid" }}>
+                  {activeProductsSorted.map((product) => {
+                    const mainImage = product.images.find((img) => img.isMain) ?? product.images[0];
+                    const hasBrokenImage = mainImage?.id ? brokenImageIds[mainImage.id] : false;
+
+                    return (
+                      <div
+                        key={product.id}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "112px minmax(180px, 1.1fr) minmax(140px, 0.9fr) minmax(260px, 1.6fr) minmax(140px, 0.9fr) auto",
+                          gap: 12,
+                          padding: 16,
+                          alignItems: "center",
+                          borderBottom: `1px solid ${color.border}`,
+                          background: editingProductId === product.id ? "#17171a" : "transparent"
+                        }}
+                      >
+                        {!mainImage?.path || hasBrokenImage ? (
+                          <div
+                            style={{
+                              width: 96,
+                              height: 96,
+                              borderRadius: 10,
+                              border: `1px solid ${color.border}`,
+                              background: color.cardSoft,
+                              color: color.muted,
+                              display: "grid",
+                              placeItems: "center",
+                              fontSize: 12
+                            }}
+                          >
+                            No image
+                          </div>
+                        ) : (
+                          <img
+                            src={resolveProductImageSrc(mainImage.path)}
+                            alt={mainImage.alt ?? product.name}
+                            onError={() => {
+                              if (mainImage.id) {
+                                setBrokenImageIds((prev) => ({ ...prev, [mainImage.id]: true }));
+                              }
+                            }}
+                            style={{
+                              width: 96,
+                              height: 96,
+                              objectFit: "cover",
+                              borderRadius: 10,
+                              border: `1px solid ${color.border}`,
+                              background: color.cardSoft
+                            }}
+                          />
+                        )}
+
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#fff", marginBottom: 4 }}>{product.name}</div>
+                          <div style={{ fontSize: 12, color: color.muted }}>{product.slug}</div>
+                        </div>
+                        <div style={{ color: color.text }}>{deriveCategoryFromProduct(product)}</div>
+                        <div style={{ color: color.text, fontSize: 14 }}>{product.description?.trim() || "No description"}</div>
+                        <div style={{ color: color.muted, fontSize: 13 }}>
+                          {product.variants.length} variants
+                          <div>{product.images.length} images</div>
+                        </div>
+                        <button
+                          style={editingProductId === product.id ? ghostButtonStyle : buttonStyle}
+                          onClick={() => {
+                            setEditingProductId(product.id);
+                            setSelectedProductId(product.id);
+                            setSelectedVariantId("");
+                          }}
+                        >
+                          {editingProductId === product.id ? "Open" : "Edit"}
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {activeProducts.length === 0 ? <p style={{ padding: 16, color: color.muted }}>No active products yet.</p> : null}
+                </div>
+              </div>
+
+              {editingProduct && editingProductDraft ? (
+                <aside
+                  style={{
+                    border: `1px solid ${color.border}`,
+                    background: color.card,
+                    borderRadius: 14,
+                    padding: 16,
+                    position: "sticky",
+                    top: 18,
+                    display: "grid",
+                    gap: 14
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12 }}>
+                    <div>
+                      <h2 style={{ fontSize: 20, color: "#fff", marginBottom: 4 }}>{editingProduct.name}</h2>
+                      <p style={{ color: color.muted, fontSize: 13 }}>{editingProduct.slug}</p>
+                    </div>
+                    <button
+                      style={ghostButtonStyle}
+                      onClick={() => {
+                        setEditingProductId("");
+                        setSelectedProductId("");
+                        setSelectedVariantId("");
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <section style={{ display: "grid", gap: 10, border: `1px solid ${color.border}`, borderRadius: 12, padding: 12, background: color.cardSoft }}>
+                    <strong style={{ color: "#fff" }}>Product</strong>
+                    <input
+                      style={inputStyle}
+                      value={editingProductDraft.name}
+                      onChange={(e) => patchProductDraft(editingProduct.id, { name: e.target.value })}
+                      placeholder="Name"
+                    />
+                    <input
+                      style={inputStyle}
+                      value={editingProductDraft.slug}
+                      onChange={(e) => patchProductDraft(editingProduct.id, { slug: e.target.value })}
+                      placeholder="Slug"
+                    />
+                    <input
+                      style={inputStyle}
+                      value={editingProductDraft.category}
+                      onChange={(e) => patchProductDraft(editingProduct.id, { category: e.target.value })}
+                      placeholder="Category"
+                    />
+                    <textarea
+                      style={textareaStyle}
+                      value={editingProductDraft.description}
+                      onChange={(e) => patchProductDraft(editingProduct.id, { description: e.target.value })}
+                      placeholder="Short description"
+                    />
+                    <label style={{ color: color.muted, fontSize: 14 }}>
+                      <input
+                        checked={editingProductDraft.isActive}
+                        onChange={(e) => patchProductDraft(editingProduct.id, { isActive: e.target.checked })}
+                        type="checkbox"
+                      />{" "}
+                      Active product
+                    </label>
+                    <button style={buttonStyle} onClick={() => saveProductInline(editingProduct.id)}>
+                      Save Product
+                    </button>
+                  </section>
+
+                  <section style={{ display: "grid", gap: 10, border: `1px solid ${color.border}`, borderRadius: 12, padding: 12, background: color.cardSoft }}>
+                    <strong style={{ color: "#fff" }}>Variants</strong>
+                    <select
+                      style={inputStyle}
+                      value={selectedVariantId}
+                      onChange={(e) => {
+                        const variantId = e.target.value;
+                        setSelectedVariantId(variantId);
+                        const variant = editingProduct.variants.find((item) => item.id === variantId);
+                        if (variant) {
+                          const eur = variant.prices.find((price) => price.currency === "EUR" && price.isActive);
+                          setVariantEur(eur?.amountMinor ?? 3900);
+                          setVariantInventory(variant.inventory?.quantity ?? 0);
+                          setVariantColor(variant.color);
+                          setVariantSize(variant.size as VariantSize);
+                          setVariantIsActive(variant.isActive);
+                        }
+                      }}
+                    >
+                      <option value="">Select variant</option>
+                      {editingProduct.variants.map((variant) => (
+                        <option key={variant.id} value={variant.id}>
+                          {variant.size} / {variant.color}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedVariant ? (
+                      <div style={{ fontSize: 13, color: color.muted, lineHeight: 1.5 }}>
+                        Selected variant: {selectedVariant.size} / {selectedVariant.color}
+                        <div>Stock: {selectedVariant.inventory?.quantity ?? 0}</div>
+                        <div>Reserved: {selectedVariant.inventory?.reservedQuantity ?? 0}</div>
+                      </div>
+                    ) : null}
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
+                        {SIZE_OPTIONS.map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </select>
+                      <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <input
+                        style={inputStyle}
+                        value={variantInventory}
+                        onChange={(e) => setVariantInventory(Number(e.target.value) || 0)}
+                        type="number"
+                        placeholder="Stock"
+                      />
+                      <input
+                        style={inputStyle}
+                        value={variantEur}
+                        onChange={(e) => setVariantEur(Number(e.target.value) || 0)}
+                        type="number"
+                        placeholder="EUR minor"
+                      />
+                    </div>
+
+                    <label style={{ color: color.muted, fontSize: 14 }}>
+                      <input checked={variantIsActive} onChange={(e) => setVariantIsActive(e.target.checked)} type="checkbox" /> Active variant
+                    </label>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <button style={buttonStyle} onClick={(e) => void createVariant(e as unknown as FormEvent)}>
+                        Create Variant
+                      </button>
+                      <button
+                        style={selectedVariant ? buttonStyle : ghostButtonStyle}
+                        onClick={(e) => void updateSelectedVariantMeta(e as unknown as FormEvent)}
+                        disabled={!selectedVariant}
+                      >
+                        Save Meta
+                      </button>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <button
+                        style={selectedVariant ? buttonStyle : ghostButtonStyle}
+                        onClick={(e) => void updateSelectedVariantPrices(e as unknown as FormEvent)}
+                        disabled={!selectedVariant}
+                      >
+                        Save EUR Price
+                      </button>
+                      <button
+                        style={selectedVariant ? buttonStyle : ghostButtonStyle}
+                        onClick={(e) => void updateSelectedVariantInventory(e as unknown as FormEvent)}
+                        disabled={!selectedVariant}
+                      >
+                        Save Stock
+                      </button>
+                    </div>
+                  </section>
+
+                  <section style={{ display: "grid", gap: 10, border: `1px solid ${color.border}`, borderRadius: 12, padding: 12, background: color.cardSoft }}>
+                    <strong style={{ color: "#fff" }}>Images</strong>
+                    <input style={inputStyle} value={imagePath} onChange={(e) => setImagePath(e.target.value)} placeholder="/products/your-image.png" />
+                    <input style={inputStyle} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="Alt text" />
+                    <input style={inputStyle} value={imageSortOrder} onChange={(e) => setImageSortOrder(Number(e.target.value) || 0)} type="number" />
+                    <label style={{ color: color.muted, fontSize: 14 }}>
+                      <input checked={imageIsMain} onChange={(e) => setImageIsMain(e.target.checked)} type="checkbox" /> Set as main image
+                    </label>
+                    <button style={buttonStyle} onClick={(e) => void addImageToProduct(e as unknown as FormEvent)}>
+                      Attach Image
+                    </button>
+                  </section>
+                </aside>
+              ) : null}
+            </section>
           ) : null}
 
           {activeTab === "orders" ? (
