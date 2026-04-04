@@ -87,10 +87,6 @@ export default function AdminPage() {
     Record<string, { code: string; type: "PERCENT" | "FIXED"; value: number; isActive: boolean }>
   >({});
 
-  const authHeaders = useMemo(() => {
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }, [token]);
-
   const selectedProduct = useMemo(() => products.find((p) => p.id === selectedProductId) ?? null, [products, selectedProductId]);
   const selectedVariant = useMemo(
     () => selectedProduct?.variants.find((v) => v.id === selectedVariantId) ?? null,
@@ -124,13 +120,15 @@ export default function AdminPage() {
   }, [token]);
 
   async function authedRequest(path: string, init?: RequestInit) {
+    const headers = new Headers(init?.headers);
+    headers.set("Content-Type", "application/json");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
     return fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders,
-        ...(init?.headers ?? {})
-      }
+      headers
     });
   }
 
