@@ -23,6 +23,7 @@ const GLOWS: Array<"red" | "amber"> = ["red", "amber"];
 
 function resolveImageSrc(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
+  if (path.startsWith("/products/")) return path;
   if (path.startsWith("/")) return `${API_ORIGIN}${path}`;
   return `${API_ORIGIN}/${path}`;
 }
