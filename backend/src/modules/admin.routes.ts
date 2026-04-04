@@ -37,6 +37,7 @@ const createProductSchema = z.object({
   name: z.string().trim().min(2),
   category: z.string().trim().min(2).optional(),
   description: z.string().trim().optional(),
+  sectionsJson: z.string().trim().optional(),
   isActive: z.boolean().optional()
 });
 
@@ -45,6 +46,7 @@ const updateProductSchema = z.object({
   name: z.string().trim().min(2).optional(),
   category: z.string().trim().min(2).optional(),
   description: z.string().trim().optional(),
+  sectionsJson: z.string().trim().optional(),
   isActive: z.boolean().optional()
 });
 
@@ -324,6 +326,7 @@ adminRouter.post("/admin/products", requireAdmin, async (req: AuthenticatedReque
       name: parsed.data.name,
       category: parsed.data.category ?? "General",
       description: parsed.data.description,
+      sectionsJson: parsed.data.sectionsJson,
       isActive: parsed.data.isActive ?? true
     }
   });
@@ -357,6 +360,7 @@ adminRouter.patch("/admin/products/:id", requireAdmin, async (req: Authenticated
       name: parsed.data.name,
       category: parsed.data.category,
       description: parsed.data.description,
+      sectionsJson: parsed.data.sectionsJson,
       isActive: parsed.data.isActive
     }
   });
@@ -409,6 +413,30 @@ adminRouter.post("/admin/products/:id/images", requireAdmin, async (req: Authent
   });
 
   return res.status(201).json(image);
+});
+
+adminRouter.delete("/admin/products/:id", requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const id = firstParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: "Missing product id" });
+  }
+
+  const product = await prisma.product.findUnique({ where: { id } });
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  await prisma.product.delete({ where: { id } });
+
+  await writeAuditLog({
+    adminUserId: req.admin!.id,
+    action: "DELETE",
+    entityType: "Product",
+    entityId: id,
+    diffJson: { slug: product.slug }
+  });
+
+  return res.status(204).send();
 });
 
 adminRouter.post("/admin/variants", requireAdmin, async (req: AuthenticatedRequest, res: Response) => {

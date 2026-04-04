@@ -10,6 +10,7 @@ type AdminProduct = {
   name: string;
   category?: string | null;
   description?: string | null;
+  sectionsJson?: string | null;
   isActive: boolean;
   images: Array<{
     id: string;
@@ -66,6 +67,7 @@ type MeResponse = {
 type VariantSize = "S" | "M" | "L" | "XL" | "XXL" | "XXXL";
 type AdminTab = "products" | "orders" | "promos" | "users";
 type Toast = { id: number; text: string; kind: "success" | "error" };
+type ProductSection = { title: string; items: string[] };
 type ProductDraft = { name: string; slug: string; category: string; description: string; isActive: boolean };
 const SIZE_OPTIONS: readonly VariantSize[] = ["S", "M", "L", "XL", "XXL", "XXXL"];
 
@@ -206,6 +208,8 @@ export default function AdminPage() {
   const [promos, setPromos] = useState<AdminPromo[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [brokenImageIds, setBrokenImageIds] = useState<Record<string, boolean>>({});
+  const [imagePreviewSrc, setImagePreviewSrc] = useState<string | null>(null);
+  const [productSections, setProductSections] = useState<Record<string, ProductSection[]>>({});
 
   const [newProductName, setNewProductName] = useState("");
   const [newProductSlug, setNewProductSlug] = useState("");
@@ -377,6 +381,14 @@ export default function AdminPage() {
         ])
       )
     );
+    setProductSections(
+      Object.fromEntries(
+        productsData.map((p) => [
+          p.id,
+          p.sectionsJson ? (JSON.parse(p.sectionsJson) as ProductSection[]) : []
+        ])
+      )
+    );
     setPromoDrafts(
       Object.fromEntries(promosData.map((p) => [p.id, { code: p.code, type: p.type, value: p.value, isActive: p.isActive }]))
     );
@@ -479,9 +491,12 @@ export default function AdminPage() {
       return;
     }
 
+    const sections = productSections[productId] ?? [];
+    const sectionsJson = sections.length > 0 ? JSON.stringify(sections) : null;
+
     const response = await authedRequest(`/admin/products/${productId}`, {
       method: "PATCH",
-      body: JSON.stringify(draft)
+      body: JSON.stringify({ ...draft, sectionsJson })
     });
 
     if (!response.ok) {
@@ -614,6 +629,27 @@ export default function AdminPage() {
     }
   }
 
+  async function deleteProduct(productId: string, productName: string) {
+    if (!token) return;
+    if (!window.confirm(`Delete "${productName}"? This cannot be undone.`)) return;
+
+    const response = await authedRequest(`/admin/products/${productId}`, { method: "DELETE" });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      pushToast((data as { message?: string }).message ?? "Delete failed", "error");
+      return;
+    }
+
+    if (editingProductId === productId) {
+      setEditingProductId("");
+      setSelectedProductId("");
+      setSelectedVariantId("");
+    }
+    pushToast(`"${productName}" deleted`, "success");
+    await loadAll();
+  }
+
   async function savePromoInline(promoId: string) {
     const draft = promoDrafts[promoId];
     if (!draft) return;
@@ -670,6 +706,33 @@ export default function AdminPage() {
     >
       <h1 style={{ fontSize: 34, marginBottom: 8, letterSpacing: 0.5, color: "#fff" }}>Driven By Faith Admin</h1>
       <p style={{ marginBottom: 14, color: color.muted }}>{statusText}</p>
+
+      {imagePreviewSrc ? (
+        <div
+          onClick={() => setImagePreviewSrc(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            background: "rgba(0,0,0,0.88)",
+            display: "grid",
+            placeItems: "center",
+            cursor: "zoom-out"
+          }}
+        >
+          <img
+            src={imagePreviewSrc}
+            alt="Preview"
+            style={{
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              borderRadius: 14,
+              boxShadow: "0 8px 48px rgba(0,0,0,0.7)",
+              objectFit: "contain"
+            }}
+          />
+        </div>
+      ) : null}
 
       <div style={{ position: "fixed", top: 12, right: 12, zIndex: 50, display: "grid", gap: 8 }}>
         {toasts.map((t) => (
@@ -878,13 +941,16 @@ export default function AdminPage() {
                                 setBrokenImageIds((prev) => ({ ...prev, [mainImage.id]: true }));
                               }
                             }}
+                            onMouseEnter={() => setImagePreviewSrc(resolveProductImageSrc(mainImage.path))}
+                            onMouseLeave={() => setImagePreviewSrc(null)}
                             style={{
                               width: 96,
                               height: 96,
                               objectFit: "cover",
                               borderRadius: 10,
                               border: `1px solid ${color.border}`,
-                              background: color.cardSoft
+                              background: color.cardSoft,
+                              cursor: "zoom-in"
                             }}
                           />
                         )}
@@ -899,16 +965,24 @@ export default function AdminPage() {
                           {product.variants.length} variants
                           <div>{product.images.length} images</div>
                         </div>
-                        <button
-                          style={editingProductId === product.id ? ghostButtonStyle : buttonStyle}
-                          onClick={() => {
-                            setEditingProductId(product.id);
-                            setSelectedProductId(product.id);
-                            setSelectedVariantId("");
-                          }}
-                        >
-                          {editingProductId === product.id ? "Open" : "Edit"}
-                        </button>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <button
+                            style={editingProductId === product.id ? ghostButtonStyle : buttonStyle}
+                            onClick={() => {
+                              setEditingProductId(product.id);
+                              setSelectedProductId(product.id);
+                              setSelectedVariantId("");
+                            }}
+                          >
+                            {editingProductId === product.id ? "Open" : "Edit"}
+                          </button>
+                          <button
+                            style={{ ...ghostButtonStyle, color: color.danger, borderColor: color.danger, padding: "8px 14px", fontSize: 13 }}
+                            onClick={() => void deleteProduct(product.id, product.name)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -988,6 +1062,85 @@ export default function AdminPage() {
                         placeholder="Short product description"
                       />
                     </div>
+
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Sections (Details / Size & Fit / Info…)</span>
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {(productSections[editingProduct.id] ?? []).map((section, si) => (
+                          <div key={si} style={{ border: `1px solid ${color.border}`, borderRadius: 10, padding: 10, background: "#09090b" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, marginBottom: 8 }}>
+                              <input
+                                style={{ ...inputStyle, fontWeight: 700 }}
+                                value={section.title}
+                                onChange={(e) => {
+                                  const updated = [...(productSections[editingProduct.id] ?? [])];
+                                  updated[si] = { ...updated[si], title: e.target.value };
+                                  setProductSections((prev) => ({ ...prev, [editingProduct.id]: updated }));
+                                }}
+                                placeholder="DETAILS"
+                              />
+                              <button
+                                style={{ ...ghostButtonStyle, color: color.danger, borderColor: color.danger, padding: "8px 12px" }}
+                                onClick={() => {
+                                  const updated = (productSections[editingProduct.id] ?? []).filter((_, i) => i !== si);
+                                  setProductSections((prev) => ({ ...prev, [editingProduct.id]: updated }));
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <div style={{ display: "grid", gap: 6 }}>
+                              {section.items.map((item, ii) => (
+                                <div key={ii} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
+                                  <input
+                                    style={inputStyle}
+                                    value={item}
+                                    onChange={(e) => {
+                                      const updated = [...(productSections[editingProduct.id] ?? [])];
+                                      const items = [...updated[si].items];
+                                      items[ii] = e.target.value;
+                                      updated[si] = { ...updated[si], items };
+                                      setProductSections((prev) => ({ ...prev, [editingProduct.id]: updated }));
+                                    }}
+                                    placeholder="Line of text…"
+                                  />
+                                  <button
+                                    style={{ ...ghostButtonStyle, color: color.danger, borderColor: color.danger, padding: "8px 10px", fontSize: 13 }}
+                                    onClick={() => {
+                                      const updated = [...(productSections[editingProduct.id] ?? [])];
+                                      updated[si] = { ...updated[si], items: updated[si].items.filter((_, i) => i !== ii) };
+                                      setProductSections((prev) => ({ ...prev, [editingProduct.id]: updated }));
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                              <button
+                                style={{ ...ghostButtonStyle, padding: "6px 12px", fontSize: 13 }}
+                                onClick={() => {
+                                  const updated = [...(productSections[editingProduct.id] ?? [])];
+                                  updated[si] = { ...updated[si], items: [...updated[si].items, ""] };
+                                  setProductSections((prev) => ({ ...prev, [editingProduct.id]: updated }));
+                                }}
+                              >
+                                + Add line
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        <button
+                          style={{ ...ghostButtonStyle, padding: "8px 12px", fontSize: 13 }}
+                          onClick={() => {
+                            const current = productSections[editingProduct.id] ?? [];
+                            setProductSections((prev) => ({ ...prev, [editingProduct.id]: [...current, { title: "", items: [""] }] }));
+                          }}
+                        >
+                          + Add section
+                        </button>
+                      </div>
+                    </div>
+
                     <label style={{ color: color.muted, fontSize: 14 }}>
                       <input
                         checked={editingProductDraft.isActive}
