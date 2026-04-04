@@ -9,7 +9,25 @@ import { stripeWebhookRouter } from "./modules/stripe.webhook.routes.js";
 
 const app = express();
 
-app.use(cors({ origin: env.FRONTEND_URL }));
+const allowedOrigins = Array.from(
+  new Set([
+    env.FRONTEND_URL,
+    env.FRONTEND_URL.replace("https://", "https://www."),
+    env.FRONTEND_URL.replace("https://www.", "https://")
+  ])
+);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      console.warn("CORS blocked origin", { origin, allowedOrigins });
+      return callback(new Error("Not allowed by CORS"));
+    }
+  })
+);
 app.use("/api/v1/webhooks/stripe", express.raw({ type: "application/json" }), stripeWebhookRouter);
 app.use(express.json());
 
@@ -28,6 +46,12 @@ app.get("/api/v1/meta", (_req: Request, res: Response) => {
 app.use("/api/v1", productsRouter);
 app.use("/api/v1", checkoutRouter);
 app.use("/api/v1", adminRouter);
+
+console.log("Routes mounted", {
+  products: "/api/v1/*",
+  checkout: "/api/v1/*",
+  admin: "/api/v1/admin/*"
+});
 
 app.use((err: unknown, _req: Request, res: Response, _next: unknown) => {
   console.error("Unhandled error", err);

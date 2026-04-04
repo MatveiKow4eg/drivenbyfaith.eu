@@ -145,48 +145,64 @@ async function writeAuditLog(input: {
 }
 
 adminRouter.post("/admin/auth/login", async (req: Request, res: Response) => {
-  const parsed = loginSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
-  }
+  try {
+    console.log("[admin.login] hit", {
+      origin: req.headers.origin,
+      hasBody: Boolean(req.body),
+      contentType: req.headers["content-type"]
+    });
 
-  const { email, password } = parsed.data;
-
-  const admin = await prisma.adminUser.findFirst({
-    where: {
-      email: email.toLowerCase(),
-      isActive: true
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      console.warn("[admin.login] invalid payload", { issues: parsed.error.flatten() });
+      return res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
     }
-  });
 
-  if (!admin) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
+    const { email, password } = parsed.data;
+    console.log("[admin.login] before db query", { email: email.toLowerCase() });
 
-  const valid = await bcrypt.compare(password, admin.passwordHash);
-  if (!valid) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
+    const admin = await prisma.adminUser.findFirst({
+      where: {
+        email: email.toLowerCase(),
+        isActive: true
+      }
+    });
 
-  await prisma.adminUser.update({
-    where: { id: admin.id },
-    data: { lastLoginAt: new Date() }
-  });
+    if (!admin) {
+      console.warn("[admin.login] user not found or inactive", { email: email.toLowerCase() });
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-  const token = signAdminToken({
-    id: admin.id,
-    email: admin.email,
-    role: admin.role as AdminRole
-  });
+    const valid = await bcrypt.compare(password, admin.passwordHash);
+    console.log("[admin.login] password check", { adminId: admin.id, valid });
+    if (!valid) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-  return res.status(200).json({
-    token,
-    admin: {
+    await prisma.adminUser.update({
+      where: { id: admin.id },
+      data: { lastLoginAt: new Date() }
+    });
+
+    const token = signAdminToken({
       id: admin.id,
       email: admin.email,
-      role: admin.role
-    }
-  });
+      role: admin.role as AdminRole
+    });
+
+    console.log("[admin.login] success", { adminId: admin.id, role: admin.role });
+    return res.status(200).json({
+      token,
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        role: admin.role
+      }
+    });
+  } catch (error) {
+    console.error("[admin.login] unhandled error", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 adminRouter.get("/admin/me", requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
