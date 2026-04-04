@@ -268,25 +268,6 @@ export default function ProductPage() {
         </div>
       ) : null}
 
-      <section className="hero" aria-label="Driven By Faith hero">
-        <div className="hero-copy">
-          <div className="hero-logo" aria-label="Driven By Faith logo">
-            <span className="hero-logo-top">DRIVEN BY</span>
-            <span className="hero-logo-btm">
-              {"FAITH".split("").map((l, i) => <span key={i}>{l}</span>)}
-            </span>
-          </div>
-          <nav className="hero-nav" aria-label="Main navigation">
-            <a href="/">Home</a>
-            <a href="#product">Shop</a>
-            <a href="#product">Product</a>
-            <a href="#contact">Contact</a>
-          </nav>
-          <h1>Driven by faith</h1>
-          <button className="cta-primary" onClick={() => router.push("#product")}>VIEW PRODUCT</button>
-        </div>
-      </section>
-
       <section id="product" className="product-selection" aria-label="Product details">
         <article className={`product-scene ${sceneGlow}`} aria-label={`${product.name} image`}>
           <div className="scene-bg-glow" aria-hidden="true" />
