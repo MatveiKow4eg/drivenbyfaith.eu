@@ -131,11 +131,56 @@ const ghostButtonStyle: CSSProperties = {
   cursor: "pointer"
 };
 
+const fieldLabelStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+  color: color.muted
+};
+
+const fieldStackStyle: CSSProperties = {
+  display: "grid",
+  gap: 6
+};
+
+const inputWithSuffixStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  alignItems: "center",
+  gap: 10,
+  background: "#09090b",
+  border: `1px solid ${color.border}`,
+  borderRadius: 10,
+  paddingRight: 12
+};
+
+const suffixStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: color.muted,
+  letterSpacing: 0.3,
+  textTransform: "uppercase"
+};
+
 const textareaStyle: CSSProperties = {
   ...inputStyle,
   minHeight: 96,
   resize: "vertical"
 };
+
+function formatEurMinorForInput(amountMinor: number) {
+  return (amountMinor / 100).toFixed(2);
+}
+
+function parseEurInputToMinor(value: string) {
+  const normalized = value.replace(",", ".").trim();
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0;
+  }
+  return Math.round(amount * 100);
+}
 
 export default function AdminPage() {
   const [token, setToken] = useState("");
@@ -168,7 +213,7 @@ export default function AdminPage() {
   const [variantSize, setVariantSize] = useState<VariantSize>("M");
   const [variantColor, setVariantColor] = useState("Black");
   const [variantInventory, setVariantInventory] = useState(20);
-  const [variantEur, setVariantEur] = useState(3900);
+  const [variantPriceInput, setVariantPriceInput] = useState("39.00");
   const [variantIsActive, setVariantIsActive] = useState(true);
 
   const [imagePath, setImagePath] = useState("/products/sunrise.png");
@@ -418,9 +463,11 @@ export default function AdminPage() {
     await loadAll();
   }
 
-  async function saveProductInline(productId: string) {
+  async function persistProductDraft(productId: string) {
     const draft = productDrafts[productId];
-    if (!draft) return;
+    if (!draft) {
+      return;
+    }
 
     const response = await authedRequest(`/admin/products/${productId}`, {
       method: "PATCH",
@@ -429,12 +476,8 @@ export default function AdminPage() {
 
     if (!response.ok) {
       const data = await response.json();
-      pushToast(data.message ?? "Product update failed", "error");
-      return;
+      throw new Error(data.message ?? "Product update failed");
     }
-
-    pushToast("Product updated", "success");
-    await loadAll();
   }
 
   async function addImageToProduct(e: FormEvent) {
@@ -472,7 +515,7 @@ export default function AdminPage() {
         size: variantSize,
         color: variantColor,
         inventoryQty: variantInventory,
-        priceEURMinor: variantEur,
+        priceEURMinor: parseEurInputToMinor(variantPriceInput),
         isActive: true
       })
     });
@@ -487,9 +530,10 @@ export default function AdminPage() {
     await loadAll();
   }
 
-  async function updateSelectedVariantMeta(e: FormEvent) {
-    e.preventDefault();
-    if (!token || !selectedVariantId) return;
+  async function persistSelectedVariantMeta() {
+    if (!selectedVariantId) {
+      return;
+    }
 
     const response = await authedRequest(`/admin/variants/${selectedVariantId}`, {
       method: "PATCH",
@@ -502,36 +546,30 @@ export default function AdminPage() {
 
     if (!response.ok) {
       const data = await response.json();
-      pushToast(data.message ?? "Update variant failed", "error");
+      throw new Error(data.message ?? "Update variant failed");
+    }
+  }
+
+  async function persistSelectedVariantPrice() {
+    if (!selectedVariantId) {
       return;
     }
 
-    pushToast("Variant updated", "success");
-    await loadAll();
-  }
-
-  async function updateSelectedVariantPrices(e: FormEvent) {
-    e.preventDefault();
-    if (!token || !selectedVariantId) return;
-
     const response = await authedRequest(`/admin/variants/${selectedVariantId}/prices`, {
       method: "PUT",
-      body: JSON.stringify({ eurMinor: variantEur })
+      body: JSON.stringify({ eurMinor: parseEurInputToMinor(variantPriceInput) })
     });
 
     if (!response.ok) {
       const data = await response.json();
-      pushToast(data.message ?? "Update prices failed", "error");
-      return;
+      throw new Error(data.message ?? "Update prices failed");
     }
-
-    pushToast("Prices updated", "success");
-    await loadAll();
   }
 
-  async function updateSelectedVariantInventory(e: FormEvent) {
-    e.preventDefault();
-    if (!token || !selectedVariantId) return;
+  async function persistSelectedVariantInventory() {
+    if (!selectedVariantId) {
+      return;
+    }
 
     const response = await authedRequest(`/admin/variants/${selectedVariantId}/inventory`, {
       method: "PATCH",
@@ -540,12 +578,30 @@ export default function AdminPage() {
 
     if (!response.ok) {
       const data = await response.json();
-      pushToast(data.message ?? "Update inventory failed", "error");
+      throw new Error(data.message ?? "Update inventory failed");
+    }
+  }
+
+  async function saveEditorChanges() {
+    if (!token || !editingProduct) {
       return;
     }
 
-    pushToast("Inventory updated", "success");
-    await loadAll();
+    try {
+      await persistProductDraft(editingProduct.id);
+
+      if (selectedVariantId) {
+        await persistSelectedVariantMeta();
+        await persistSelectedVariantPrice();
+        await persistSelectedVariantInventory();
+      }
+
+      pushToast(selectedVariantId ? "Product and variant saved" : "Product saved", "success");
+      await loadAll();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Save failed";
+      pushToast(message, "error");
+    }
   }
 
   async function savePromoInline(promoId: string) {
@@ -721,9 +777,18 @@ export default function AdminPage() {
                       alignItems: "center"
                     }}
                   >
-                    <input style={inputStyle} value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="Name" />
-                    <input style={inputStyle} value={newProductSlug} onChange={(e) => setNewProductSlug(e.target.value)} placeholder="Slug" />
-                    <input style={inputStyle} value={newProductCategory} onChange={(e) => setNewProductCategory(e.target.value)} placeholder="Category" />
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Product Name</span>
+                      <input style={inputStyle} value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="Black Oversized Tee" />
+                    </div>
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Product Slug</span>
+                      <input style={inputStyle} value={newProductSlug} onChange={(e) => setNewProductSlug(e.target.value)} placeholder="black-oversized-tee" />
+                    </div>
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Category</span>
+                      <input style={inputStyle} value={newProductCategory} onChange={(e) => setNewProductCategory(e.target.value)} placeholder="T-Shirts" />
+                    </div>
                     <button style={buttonStyle} type="submit">
                       Create
                     </button>
@@ -865,30 +930,42 @@ export default function AdminPage() {
 
                   <section style={{ display: "grid", gap: 10, border: `1px solid ${color.border}`, borderRadius: 12, padding: 12, background: color.cardSoft }}>
                     <strong style={{ color: "#fff" }}>Product</strong>
-                    <input
-                      style={inputStyle}
-                      value={editingProductDraft.name}
-                      onChange={(e) => patchProductDraft(editingProduct.id, { name: e.target.value })}
-                      placeholder="Name"
-                    />
-                    <input
-                      style={inputStyle}
-                      value={editingProductDraft.slug}
-                      onChange={(e) => patchProductDraft(editingProduct.id, { slug: e.target.value })}
-                      placeholder="Slug"
-                    />
-                    <input
-                      style={inputStyle}
-                      value={editingProductDraft.category}
-                      onChange={(e) => patchProductDraft(editingProduct.id, { category: e.target.value })}
-                      placeholder="Category"
-                    />
-                    <textarea
-                      style={textareaStyle}
-                      value={editingProductDraft.description}
-                      onChange={(e) => patchProductDraft(editingProduct.id, { description: e.target.value })}
-                      placeholder="Short description"
-                    />
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Product Name</span>
+                      <input
+                        style={inputStyle}
+                        value={editingProductDraft.name}
+                        onChange={(e) => patchProductDraft(editingProduct.id, { name: e.target.value })}
+                        placeholder="Product name"
+                      />
+                    </div>
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Slug</span>
+                      <input
+                        style={inputStyle}
+                        value={editingProductDraft.slug}
+                        onChange={(e) => patchProductDraft(editingProduct.id, { slug: e.target.value })}
+                        placeholder="product-slug"
+                      />
+                    </div>
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Category</span>
+                      <input
+                        style={inputStyle}
+                        value={editingProductDraft.category}
+                        onChange={(e) => patchProductDraft(editingProduct.id, { category: e.target.value })}
+                        placeholder="T-Shirts"
+                      />
+                    </div>
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Description</span>
+                      <textarea
+                        style={textareaStyle}
+                        value={editingProductDraft.description}
+                        onChange={(e) => patchProductDraft(editingProduct.id, { description: e.target.value })}
+                        placeholder="Short product description"
+                      />
+                    </div>
                     <label style={{ color: color.muted, fontSize: 14 }}>
                       <input
                         checked={editingProductDraft.isActive}
@@ -897,8 +974,8 @@ export default function AdminPage() {
                       />{" "}
                       Active product
                     </label>
-                    <button style={buttonStyle} onClick={() => saveProductInline(editingProduct.id)}>
-                      Save Product
+                    <button style={buttonStyle} onClick={() => void saveEditorChanges()}>
+                      Save
                     </button>
                   </section>
 
@@ -913,7 +990,7 @@ export default function AdminPage() {
                         const variant = editingProduct.variants.find((item) => item.id === variantId);
                         if (variant) {
                           const eur = variant.prices.find((price) => price.currency === "EUR" && price.isActive);
-                          setVariantEur(eur?.amountMinor ?? 3900);
+                          setVariantPriceInput(formatEurMinorForInput(eur?.amountMinor ?? 3900));
                           setVariantInventory(variant.inventory?.quantity ?? 0);
                           setVariantColor(variant.color);
                           setVariantSize(variant.size as VariantSize);
@@ -934,77 +1011,79 @@ export default function AdminPage() {
                         Selected variant: {selectedVariant.size} / {selectedVariant.color}
                         <div>Stock: {selectedVariant.inventory?.quantity ?? 0}</div>
                         <div>Reserved: {selectedVariant.inventory?.reservedQuantity ?? 0}</div>
+                        <div>Price: {formatEurMinorForInput(selectedVariant.prices.find((price) => price.currency === "EUR" && price.isActive)?.amountMinor ?? 0)} EUR</div>
                       </div>
                     ) : null}
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
-                        {SIZE_OPTIONS.map((size) => (
-                          <option key={size} value={size}>
-                            {size}
-                          </option>
-                        ))}
-                      </select>
-                      <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
+                      <div style={fieldStackStyle}>
+                        <span style={fieldLabelStyle}>Size</span>
+                        <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
+                          {SIZE_OPTIONS.map((size) => (
+                            <option key={size} value={size}>
+                              {size}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={fieldStackStyle}>
+                        <span style={fieldLabelStyle}>Color</span>
+                        <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Black" />
+                      </div>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <input
-                        style={inputStyle}
-                        value={variantInventory}
-                        onChange={(e) => setVariantInventory(Number(e.target.value) || 0)}
-                        type="number"
-                        placeholder="Stock"
-                      />
-                      <input
-                        style={inputStyle}
-                        value={variantEur}
-                        onChange={(e) => setVariantEur(Number(e.target.value) || 0)}
-                        type="number"
-                        placeholder="EUR minor"
-                      />
+                      <div style={fieldStackStyle}>
+                        <span style={fieldLabelStyle}>Stock Quantity</span>
+                        <input
+                          style={inputStyle}
+                          value={variantInventory}
+                          onChange={(e) => setVariantInventory(Number(e.target.value) || 0)}
+                          type="number"
+                          placeholder="20"
+                        />
+                      </div>
+                      <div style={fieldStackStyle}>
+                        <span style={fieldLabelStyle}>Price</span>
+                        <div style={inputWithSuffixStyle}>
+                          <input
+                            style={{ ...inputStyle, border: "none", paddingRight: 0 }}
+                            value={variantPriceInput}
+                            onChange={(e) => setVariantPriceInput(e.target.value)}
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="39.00"
+                          />
+                          <span style={suffixStyle}>EUR</span>
+                        </div>
+                      </div>
                     </div>
 
                     <label style={{ color: color.muted, fontSize: 14 }}>
                       <input checked={variantIsActive} onChange={(e) => setVariantIsActive(e.target.checked)} type="checkbox" /> Active variant
                     </label>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
                       <button style={buttonStyle} onClick={(e) => void createVariant(e as unknown as FormEvent)}>
                         Create Variant
-                      </button>
-                      <button
-                        style={selectedVariant ? buttonStyle : ghostButtonStyle}
-                        onClick={(e) => void updateSelectedVariantMeta(e as unknown as FormEvent)}
-                        disabled={!selectedVariant}
-                      >
-                        Save Meta
-                      </button>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <button
-                        style={selectedVariant ? buttonStyle : ghostButtonStyle}
-                        onClick={(e) => void updateSelectedVariantPrices(e as unknown as FormEvent)}
-                        disabled={!selectedVariant}
-                      >
-                        Save EUR Price
-                      </button>
-                      <button
-                        style={selectedVariant ? buttonStyle : ghostButtonStyle}
-                        onClick={(e) => void updateSelectedVariantInventory(e as unknown as FormEvent)}
-                        disabled={!selectedVariant}
-                      >
-                        Save Stock
                       </button>
                     </div>
                   </section>
 
                   <section style={{ display: "grid", gap: 10, border: `1px solid ${color.border}`, borderRadius: 12, padding: 12, background: color.cardSoft }}>
                     <strong style={{ color: "#fff" }}>Images</strong>
-                    <input style={inputStyle} value={imagePath} onChange={(e) => setImagePath(e.target.value)} placeholder="/products/your-image.png" />
-                    <input style={inputStyle} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="Alt text" />
-                    <input style={inputStyle} value={imageSortOrder} onChange={(e) => setImageSortOrder(Number(e.target.value) || 0)} type="number" />
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Image Path</span>
+                      <input style={inputStyle} value={imagePath} onChange={(e) => setImagePath(e.target.value)} placeholder="/products/your-image.png" />
+                    </div>
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Image Alt Text</span>
+                      <input style={inputStyle} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="Front photo of product" />
+                    </div>
+                    <div style={fieldStackStyle}>
+                      <span style={fieldLabelStyle}>Image Sort Order</span>
+                      <input style={inputStyle} value={imageSortOrder} onChange={(e) => setImageSortOrder(Number(e.target.value) || 0)} type="number" />
+                    </div>
                     <label style={{ color: color.muted, fontSize: 14 }}>
                       <input checked={imageIsMain} onChange={(e) => setImageIsMain(e.target.checked)} type="checkbox" /> Set as main image
                     </label>
