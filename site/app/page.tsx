@@ -72,7 +72,6 @@ export default function Home() {
             <a href="#contact">Community</a>
             <a href="#contact">Contact</a>
           </nav>
-          <h1>Driven by faith</h1>
         </div>
       </section>
 
