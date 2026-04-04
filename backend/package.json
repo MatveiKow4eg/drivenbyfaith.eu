@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+  "dev": "tsx watch src/index.ts",
+  "build": "tsc -p tsconfig.json",
+  "start": "node dist/index.js",
+  "typecheck": "tsc --noEmit",
+  "prisma:generate": "npx prisma generate",
+  "prisma:migrate:deploy": "npx prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

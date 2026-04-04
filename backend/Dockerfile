@@ -5,9 +5,12 @@ RUN npm ci
 
 FROM node:20-alpine AS build
 WORKDIR /app
+COPY package*.json ./
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm run prisma:generate
+COPY prisma ./prisma
+COPY src ./src
+COPY tsconfig.json ./
+RUN npx prisma generate
 RUN npm run build
 
 FROM node:20-alpine AS runner
