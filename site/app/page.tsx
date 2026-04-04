@@ -60,6 +60,7 @@ export default function Home() {
 
       <section className="hero" aria-label="Driven By Faith hero">
         <div className="hero-copy">
+          <h1>Driven by faith</h1>
           <div className="hero-logo" aria-label="Driven By Faith logo">
             <span className="hero-logo-top">DRIVEN BY</span>
             <span className="hero-logo-btm">

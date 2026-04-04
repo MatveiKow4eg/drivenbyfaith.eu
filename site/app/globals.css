@@ -629,11 +629,11 @@ body {
 }
 
 .dbf-product-page .hero {
-  min-height: 0;
+  min-height: auto;
 }
 
 .dbf-product-page .hero-copy {
-  min-height: auto;
+  min-height: 45vh;
   padding: clamp(0.5rem, 1.2vw, 0.9rem) clamp(0.9rem, 2.2vw, 1.4rem);
 }
 
