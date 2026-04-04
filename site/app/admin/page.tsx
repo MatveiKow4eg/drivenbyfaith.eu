@@ -1,6 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
+
+type AdminRole = "OWNER" | "ADMIN" | "SUPPORT";
 
 type AdminProduct = {
   id: string;
@@ -42,11 +44,69 @@ type AdminPromo = {
   isActive: boolean;
 };
 
+type AdminUser = {
+  id: string;
+  email: string;
+  role: AdminRole;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+};
+
+type MeResponse = {
+  admin: {
+    id: string;
+    email: string;
+    role: AdminRole;
+  };
+};
+
 type VariantSize = "S" | "M" | "L" | "XL" | "XXL" | "XXXL";
-type AdminTab = "products" | "orders" | "promos";
+type AdminTab = "products" | "orders" | "promos" | "users";
 type Toast = { id: number; text: string; kind: "success" | "error" };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.drivenbyfaith.eu/api/v1";
+
+const color = {
+  bg: "#050505",
+  card: "#0f0f10",
+  cardSoft: "#141416",
+  border: "#252529",
+  text: "#f4f4f5",
+  muted: "#a3a3ad",
+  accent: "#ffffff",
+  accentText: "#0a0a0a",
+  danger: "#c33131",
+  success: "#17803d"
+};
+
+const inputStyle: CSSProperties = {
+  background: "#09090b",
+  color: color.text,
+  border: `1px solid ${color.border}`,
+  borderRadius: 10,
+  padding: "10px 12px"
+};
+
+const buttonStyle: CSSProperties = {
+  background: color.accent,
+  color: color.accentText,
+  border: "none",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 700,
+  cursor: "pointer"
+};
+
+const ghostButtonStyle: CSSProperties = {
+  background: "transparent",
+  color: color.text,
+  border: `1px solid ${color.border}`,
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 600,
+  cursor: "pointer"
+};
 
 export default function AdminPage() {
   const [token, setToken] = useState("");
@@ -56,13 +116,19 @@ export default function AdminPage() {
   const [statusText, setStatusText] = useState("Not authenticated");
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  const [me, setMe] = useState<MeResponse["admin"] | null>(null);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [promos, setPromos] = useState<AdminPromo[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
 
   const [newProductName, setNewProductName] = useState("");
   const [newProductSlug, setNewProductSlug] = useState("");
   const [newPromoCode, setNewPromoCode] = useState("SPRING15");
+
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState<AdminRole>("ADMIN");
 
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedVariantId, setSelectedVariantId] = useState("");
@@ -163,40 +229,48 @@ export default function AdminPage() {
 
     setStatusText("Loading admin data...");
 
-    const [productsRes, ordersRes, promosRes] = await Promise.all([
+    const [meRes, productsRes, ordersRes, promosRes, usersRes] = await Promise.all([
+      authedRequest("/admin/me", { method: "GET" }),
       authedRequest("/admin/products", { method: "GET" }),
       authedRequest("/admin/orders", { method: "GET" }),
-      authedRequest("/admin/promocodes", { method: "GET" })
+      authedRequest("/admin/promocodes", { method: "GET" }),
+      authedRequest("/admin/users", { method: "GET" })
     ]);
 
-    if (!productsRes.ok || !ordersRes.ok || !promosRes.ok) {
+    if (!meRes.ok || !productsRes.ok || !ordersRes.ok || !promosRes.ok || !usersRes.ok) {
       setStatusText("Failed to load one or more admin resources");
       pushToast("Failed to load data", "error");
       return;
     }
 
+    const meData: MeResponse = await meRes.json();
     const productsData: AdminProduct[] = await productsRes.json();
     const ordersData: AdminOrder[] = await ordersRes.json();
     const promosData: AdminPromo[] = await promosRes.json();
+    const usersData: AdminUser[] = await usersRes.json();
 
+    setMe(meData.admin);
     setProducts(productsData);
     setOrders(ordersData);
     setPromos(promosData);
+    setUsers(usersData);
     setProductDrafts(
       Object.fromEntries(productsData.map((p) => [p.id, { name: p.name, slug: p.slug, isActive: p.isActive }]))
     );
     setPromoDrafts(
       Object.fromEntries(promosData.map((p) => [p.id, { code: p.code, type: p.type, value: p.value, isActive: p.isActive }]))
     );
-    setStatusText("Admin data loaded");
+    setStatusText(`Admin data loaded (${meData.admin.role})`);
     pushToast("Data refreshed", "success");
   }
 
   function logout() {
     setToken("");
+    setMe(null);
     setProducts([]);
     setOrders([]);
     setPromos([]);
+    setUsers([]);
     setStatusText("Signed out");
     pushToast("Signed out", "success");
   }
@@ -245,6 +319,34 @@ export default function AdminPage() {
     setNewProductName("");
     setNewProductSlug("");
     pushToast("Product created", "success");
+    await loadAll();
+  }
+
+  async function createAdminUser(e: FormEvent) {
+    e.preventDefault();
+    if (!token) return;
+
+    const response = await authedRequest("/admin/users", {
+      method: "POST",
+      body: JSON.stringify({
+        email: newAdminEmail,
+        password: newAdminPassword,
+        role: newAdminRole,
+        isActive: true
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      pushToast(data.message ?? "Create admin user failed", "error");
+      return;
+    }
+
+    setNewAdminEmail("");
+    setNewAdminPassword("");
+    setNewAdminRole("ADMIN");
+    pushToast(`Admin user created: ${data.email}`, "success");
     await loadAll();
   }
 
@@ -438,13 +540,24 @@ export default function AdminPage() {
   const tabs: Array<{ key: AdminTab; label: string }> = [
     { key: "products", label: "Products" },
     { key: "orders", label: "Orders" },
-    { key: "promos", label: "Promos" }
+    { key: "promos", label: "Promos" },
+    { key: "users", label: "Users" }
   ];
 
   return (
-    <main style={{ padding: 24, maxWidth: 1200, margin: "0 auto", color: "#111" }}>
-      <h1 style={{ fontSize: 32, marginBottom: 8 }}>Driven By Faith Admin</h1>
-      <p style={{ marginBottom: 14 }}>{statusText}</p>
+    <main
+      style={{
+        minHeight: "100vh",
+        padding: 24,
+        maxWidth: 1240,
+        margin: "0 auto",
+        color: color.text,
+        background: `radial-gradient(circle at top right, #19191d 0%, ${color.bg} 45%, #020202 100%)`,
+        fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif"
+      }}
+    >
+      <h1 style={{ fontSize: 34, marginBottom: 8, letterSpacing: 0.5, color: "#fff" }}>Driven By Faith Admin</h1>
+      <p style={{ marginBottom: 14, color: color.muted }}>{statusText}</p>
 
       <div style={{ position: "fixed", top: 12, right: 12, zIndex: 50, display: "grid", gap: 8 }}>
         {toasts.map((t) => (
@@ -454,8 +567,8 @@ export default function AdminPage() {
               padding: "10px 12px",
               borderRadius: 8,
               color: "#fff",
-              background: t.kind === "success" ? "#17803d" : "#c33131",
-              boxShadow: "0 4px 18px rgba(0,0,0,0.2)",
+              background: t.kind === "success" ? color.success : color.danger,
+              boxShadow: "0 4px 18px rgba(0,0,0,0.3)",
               fontSize: 13
             }}
           >
@@ -465,26 +578,49 @@ export default function AdminPage() {
       </div>
 
       {!token ? (
-        <section style={{ border: "1px solid #ddd", borderRadius: 10, padding: 16, marginBottom: 18 }}>
-          <h2 style={{ fontSize: 20, marginBottom: 12 }}>Login</h2>
+        <section style={{ border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 18, marginBottom: 18 }}>
+          <h2 style={{ fontSize: 20, marginBottom: 12, color: "#fff" }}>Login</h2>
           <form onSubmit={login} style={{ display: "grid", gap: 10, maxWidth: 480 }}>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Admin email" />
-            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" />
-            <button type="submit">Login</button>
+            <input style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Admin email" />
+            <input
+              style={inputStyle}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              type="password"
+            />
+            <button style={buttonStyle} type="submit">
+              Login
+            </button>
           </form>
         </section>
       ) : (
         <>
-          <section style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12, marginBottom: 18, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={loadAll}>Refresh Data</button>
-            <button onClick={logout}>Logout</button>
+          <section
+            style={{
+              border: `1px solid ${color.border}`,
+              background: color.card,
+              borderRadius: 14,
+              padding: 12,
+              marginBottom: 18,
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap"
+            }}
+          >
+            <button style={buttonStyle} onClick={loadAll}>
+              Refresh Data
+            </button>
+            <button style={ghostButtonStyle} onClick={logout}>
+              Logout
+            </button>
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 style={{
-                  background: activeTab === tab.key ? "#111" : "#f2f2f2",
-                  color: activeTab === tab.key ? "#fff" : "#111"
+                  ...(activeTab === tab.key ? buttonStyle : ghostButtonStyle),
+                  opacity: activeTab === tab.key ? 1 : 0.85
                 }}
               >
                 {tab.label}
@@ -495,28 +631,32 @@ export default function AdminPage() {
           {activeTab === "products" ? (
             <>
               <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-                <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 16 }}>
+                <div style={{ border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
                   <h2 style={{ fontSize: 20, marginBottom: 10 }}>Create Product</h2>
                   <form onSubmit={createProduct} style={{ display: "grid", gap: 8 }}>
-                    <input value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="Name" />
-                    <input value={newProductSlug} onChange={(e) => setNewProductSlug(e.target.value)} placeholder="Slug" />
-                    <button type="submit">Create</button>
+                    <input style={inputStyle} value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="Name" />
+                    <input style={inputStyle} value={newProductSlug} onChange={(e) => setNewProductSlug(e.target.value)} placeholder="Slug" />
+                    <button style={buttonStyle} type="submit">
+                      Create
+                    </button>
                   </form>
                 </div>
 
-                <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 16 }}>
+                <div style={{ border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
                   <h2 style={{ fontSize: 20, marginBottom: 10 }}>Create Promo</h2>
                   <form onSubmit={createPromo} style={{ display: "grid", gap: 8 }}>
-                    <input value={newPromoCode} onChange={(e) => setNewPromoCode(e.target.value)} placeholder="Code" />
-                    <button type="submit">Create 15% Promo</button>
+                    <input style={inputStyle} value={newPromoCode} onChange={(e) => setNewPromoCode(e.target.value)} placeholder="Code" />
+                    <button style={buttonStyle} type="submit">
+                      Create 15% Promo
+                    </button>
                   </form>
                 </div>
               </section>
 
-              <section style={{ marginTop: 18, border: "1px solid #ddd", borderRadius: 10, padding: 16 }}>
+              <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
                 <h2 style={{ fontSize: 20, marginBottom: 10 }}>Variant / Price / Inventory</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                  <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
+                  <select style={inputStyle} value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
                     <option value="">Select product</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -525,6 +665,7 @@ export default function AdminPage() {
                     ))}
                   </select>
                   <select
+                    style={inputStyle}
                     value={selectedVariantId}
                     onChange={(e) => {
                       const variantId = e.target.value;
@@ -553,9 +694,9 @@ export default function AdminPage() {
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
-                  <form onSubmit={createVariant} style={{ display: "grid", gap: 8, border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
+                  <form onSubmit={createVariant} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
                     <strong>Create Variant</strong>
-                    <select value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
+                    <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
                       <option>S</option>
                       <option>M</option>
                       <option>L</option>
@@ -563,17 +704,19 @@ export default function AdminPage() {
                       <option>XXL</option>
                       <option>XXXL</option>
                     </select>
-                    <input value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
-                    <input value={variantSku} onChange={(e) => setVariantSku(e.target.value)} placeholder="SKU" />
-                    <input value={variantInventory} onChange={(e) => setVariantInventory(Number(e.target.value) || 0)} type="number" />
-                    <input value={variantEur} onChange={(e) => setVariantEur(Number(e.target.value) || 0)} type="number" />
-                    <input value={variantUsd} onChange={(e) => setVariantUsd(Number(e.target.value) || 0)} type="number" />
-                    <button type="submit">Create Variant</button>
+                    <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
+                    <input style={inputStyle} value={variantSku} onChange={(e) => setVariantSku(e.target.value)} placeholder="SKU" />
+                    <input style={inputStyle} value={variantInventory} onChange={(e) => setVariantInventory(Number(e.target.value) || 0)} type="number" />
+                    <input style={inputStyle} value={variantEur} onChange={(e) => setVariantEur(Number(e.target.value) || 0)} type="number" />
+                    <input style={inputStyle} value={variantUsd} onChange={(e) => setVariantUsd(Number(e.target.value) || 0)} type="number" />
+                    <button style={buttonStyle} type="submit">
+                      Create Variant
+                    </button>
                   </form>
 
-                  <form onSubmit={updateSelectedVariantMeta} style={{ display: "grid", gap: 8, border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
+                  <form onSubmit={updateSelectedVariantMeta} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
                     <strong>Edit Variant Meta</strong>
-                    <select value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
+                    <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
                       <option>S</option>
                       <option>M</option>
                       <option>L</option>
@@ -581,60 +724,68 @@ export default function AdminPage() {
                       <option>XXL</option>
                       <option>XXXL</option>
                     </select>
-                    <input value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
-                    <input value={variantSku} onChange={(e) => setVariantSku(e.target.value)} placeholder="SKU" />
-                    <label>
+                    <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
+                    <input style={inputStyle} value={variantSku} onChange={(e) => setVariantSku(e.target.value)} placeholder="SKU" />
+                    <label style={{ color: color.muted }}>
                       <input checked={variantIsActive} onChange={(e) => setVariantIsActive(e.target.checked)} type="checkbox" /> Active
                     </label>
-                    <button type="submit">Save Variant Meta</button>
+                    <button style={buttonStyle} type="submit">
+                      Save Variant Meta
+                    </button>
                   </form>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start", marginTop: 12 }}>
-                  <form onSubmit={updateSelectedVariantPrices} style={{ display: "grid", gap: 8, border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
+                  <form onSubmit={updateSelectedVariantPrices} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
                     <strong>Update Prices</strong>
-                    <input value={variantEur} onChange={(e) => setVariantEur(Number(e.target.value) || 0)} type="number" />
-                    <input value={variantUsd} onChange={(e) => setVariantUsd(Number(e.target.value) || 0)} type="number" />
-                    <button type="submit">Save Prices</button>
+                    <input style={inputStyle} value={variantEur} onChange={(e) => setVariantEur(Number(e.target.value) || 0)} type="number" />
+                    <input style={inputStyle} value={variantUsd} onChange={(e) => setVariantUsd(Number(e.target.value) || 0)} type="number" />
+                    <button style={buttonStyle} type="submit">
+                      Save Prices
+                    </button>
                   </form>
 
-                  <form onSubmit={updateSelectedVariantInventory} style={{ display: "grid", gap: 8, border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
+                  <form onSubmit={updateSelectedVariantInventory} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
                     <strong>Update Inventory</strong>
-                    <input value={variantInventory} onChange={(e) => setVariantInventory(Number(e.target.value) || 0)} type="number" />
-                    <button type="submit">Save Inventory</button>
+                    <input style={inputStyle} value={variantInventory} onChange={(e) => setVariantInventory(Number(e.target.value) || 0)} type="number" />
+                    <button style={buttonStyle} type="submit">
+                      Save Inventory
+                    </button>
                   </form>
                 </div>
 
                 {selectedVariant ? (
-                  <p style={{ marginTop: 10, fontSize: 13 }}>
+                  <p style={{ marginTop: 10, fontSize: 13, color: color.muted }}>
                     Selected: {selectedVariant.sku}, stock {selectedVariant.inventory?.quantity ?? 0}, reserved {selectedVariant.inventory?.reservedQuantity ?? 0}
                   </p>
                 ) : null}
               </section>
 
-              <section style={{ marginTop: 18, border: "1px solid #ddd", borderRadius: 10, padding: 16 }}>
+              <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
                 <h2 style={{ fontSize: 20, marginBottom: 10 }}>Product Images</h2>
                 <form onSubmit={addImageToProduct} style={{ display: "grid", gap: 8, maxWidth: 580 }}>
-                  <input value={imagePath} onChange={(e) => setImagePath(e.target.value)} placeholder="/products/your-image.png" />
-                  <input value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="Alt text" />
-                  <input value={imageSortOrder} onChange={(e) => setImageSortOrder(Number(e.target.value) || 0)} type="number" />
-                  <label>
+                  <input style={inputStyle} value={imagePath} onChange={(e) => setImagePath(e.target.value)} placeholder="/products/your-image.png" />
+                  <input style={inputStyle} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="Alt text" />
+                  <input style={inputStyle} value={imageSortOrder} onChange={(e) => setImageSortOrder(Number(e.target.value) || 0)} type="number" />
+                  <label style={{ color: color.muted }}>
                     <input checked={imageIsMain} onChange={(e) => setImageIsMain(e.target.checked)} type="checkbox" /> Set as main image
                   </label>
-                  <button type="submit">Attach Image to Selected Product</button>
+                  <button style={buttonStyle} type="submit">
+                    Attach Image to Selected Product
+                  </button>
                 </form>
-                <p style={{ fontSize: 13, marginTop: 8 }}>Selected product: {selectedProduct?.name ?? "not selected"}</p>
+                <p style={{ fontSize: 13, marginTop: 8, color: color.muted }}>Selected product: {selectedProduct?.name ?? "not selected"}</p>
               </section>
 
-              <section style={{ marginTop: 18, border: "1px solid #ddd", borderRadius: 10, padding: 16 }}>
+              <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
                 <h2 style={{ fontSize: 20, marginBottom: 10 }}>Products ({products.length})</h2>
                 <ul style={{ display: "grid", gap: 8 }}>
                   {products.map((p) => (
-                    <li key={p.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
+                    <li key={p.id} style={{ border: `1px solid ${color.border}`, borderRadius: 10, padding: 10, background: color.cardSoft }}>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 8 }}>
-                        <input value={productDrafts[p.id]?.name ?? p.name} onChange={(e) => patchProductDraft(p.id, { name: e.target.value })} />
-                        <input value={productDrafts[p.id]?.slug ?? p.slug} onChange={(e) => patchProductDraft(p.id, { slug: e.target.value })} />
-                        <label>
+                        <input style={inputStyle} value={productDrafts[p.id]?.name ?? p.name} onChange={(e) => patchProductDraft(p.id, { name: e.target.value })} />
+                        <input style={inputStyle} value={productDrafts[p.id]?.slug ?? p.slug} onChange={(e) => patchProductDraft(p.id, { slug: e.target.value })} />
+                        <label style={{ color: color.muted }}>
                           <input
                             checked={productDrafts[p.id]?.isActive ?? p.isActive}
                             onChange={(e) => patchProductDraft(p.id, { isActive: e.target.checked })}
@@ -642,10 +793,12 @@ export default function AdminPage() {
                           />{" "}
                           Active
                         </label>
-                        <button onClick={() => saveProductInline(p.id)}>Save</button>
+                        <button style={buttonStyle} onClick={() => saveProductInline(p.id)}>
+                          Save
+                        </button>
                       </div>
-                      <div style={{ fontSize: 13, marginTop: 4 }}>Variants: {p.variants.length}</div>
-                      <div style={{ fontSize: 13, marginTop: 4 }}>
+                      <div style={{ fontSize: 13, marginTop: 4, color: color.muted }}>Variants: {p.variants.length}</div>
+                      <div style={{ fontSize: 13, marginTop: 4, color: color.muted }}>
                         Images: {p.images.length} | Main: {p.images.find((img) => img.isMain)?.path ?? "none"}
                       </div>
                     </li>
@@ -656,10 +809,10 @@ export default function AdminPage() {
           ) : null}
 
           {activeTab === "orders" ? (
-            <section style={{ marginTop: 18, border: "1px solid #ddd", borderRadius: 10, padding: 16 }}>
+            <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
               <h2 style={{ fontSize: 20, marginBottom: 10 }}>Orders ({visibleOrders.length}/{orders.length})</h2>
               <div style={{ marginBottom: 10 }}>
-                <select value={orderFilter} onChange={(e) => setOrderFilter(e.target.value as AdminOrder["status"] | "ALL")}>
+                <select style={inputStyle} value={orderFilter} onChange={(e) => setOrderFilter(e.target.value as AdminOrder["status"] | "ALL")}>
                   <option value="ALL">All statuses</option>
                   <option value="PENDING">PENDING</option>
                   <option value="PAID">PAID</option>
@@ -671,14 +824,14 @@ export default function AdminPage() {
               </div>
               <ul style={{ display: "grid", gap: 8 }}>
                 {visibleOrders.map((o) => (
-                  <li key={o.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
+                  <li key={o.id} style={{ border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 10, padding: 10 }}>
                     <strong>{o.orderNumber}</strong> | {o.email} | {(o.totalMinor / 100).toFixed(2)} {o.currency}
                     <div style={{ marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <span>Status: {o.status}</span>
-                      <button onClick={() => updateOrderStatus(o.id, "PAID")}>Set PAID</button>
-                      <button onClick={() => updateOrderStatus(o.id, "PROCESSING")}>Set PROCESSING</button>
-                      <button onClick={() => updateOrderStatus(o.id, "SHIPPED")}>Set SHIPPED</button>
-                      <button onClick={() => updateOrderStatus(o.id, "CANCELED")}>Set CANCELED</button>
+                      <span style={{ color: color.muted }}>Status: {o.status}</span>
+                      <button style={ghostButtonStyle} onClick={() => updateOrderStatus(o.id, "PAID")}>Set PAID</button>
+                      <button style={ghostButtonStyle} onClick={() => updateOrderStatus(o.id, "PROCESSING")}>Set PROCESSING</button>
+                      <button style={ghostButtonStyle} onClick={() => updateOrderStatus(o.id, "SHIPPED")}>Set SHIPPED</button>
+                      <button style={ghostButtonStyle} onClick={() => updateOrderStatus(o.id, "CANCELED")}>Set CANCELED</button>
                     </div>
                   </li>
                 ))}
@@ -687,17 +840,19 @@ export default function AdminPage() {
           ) : null}
 
           {activeTab === "promos" ? (
-            <section style={{ marginTop: 18, border: "1px solid #ddd", borderRadius: 10, padding: 16 }}>
+            <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
               <h2 style={{ fontSize: 20, marginBottom: 10 }}>Promo Codes ({promos.length})</h2>
               <ul style={{ display: "grid", gap: 8 }}>
                 {promos.map((promo) => (
-                  <li key={promo.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
+                  <li key={promo.id} style={{ border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 10, padding: 10 }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto auto", gap: 8 }}>
                       <input
+                        style={inputStyle}
                         value={promoDrafts[promo.id]?.code ?? promo.code}
                         onChange={(e) => patchPromoDraft(promo.id, { code: e.target.value.toUpperCase() })}
                       />
                       <select
+                        style={inputStyle}
                         value={promoDrafts[promo.id]?.type ?? promo.type}
                         onChange={(e) => patchPromoDraft(promo.id, { type: e.target.value as "PERCENT" | "FIXED" })}
                       >
@@ -705,11 +860,12 @@ export default function AdminPage() {
                         <option value="FIXED">FIXED</option>
                       </select>
                       <input
+                        style={inputStyle}
                         value={promoDrafts[promo.id]?.value ?? promo.value}
                         onChange={(e) => patchPromoDraft(promo.id, { value: Number(e.target.value) || 0 })}
                         type="number"
                       />
-                      <label>
+                      <label style={{ color: color.muted }}>
                         <input
                           checked={promoDrafts[promo.id]?.isActive ?? promo.isActive}
                           onChange={(e) => patchPromoDraft(promo.id, { isActive: e.target.checked })}
@@ -717,7 +873,53 @@ export default function AdminPage() {
                         />{" "}
                         Active
                       </label>
-                      <button onClick={() => savePromoInline(promo.id)}>Save</button>
+                      <button style={buttonStyle} onClick={() => savePromoInline(promo.id)}>
+                        Save
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {activeTab === "users" ? (
+            <section style={{ marginTop: 18, border: `1px solid ${color.border}`, background: color.card, borderRadius: 14, padding: 16 }}>
+              <h2 style={{ fontSize: 20, marginBottom: 10, color: "#fff" }}>Admin Users ({users.length})</h2>
+              <p style={{ marginBottom: 12, color: color.muted }}>
+                Current role: {me?.role ?? "UNKNOWN"}. New admin creation is allowed only for OWNER.
+              </p>
+
+              <form onSubmit={createAdminUser} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 220px auto", gap: 10, marginBottom: 14 }}>
+                <input
+                  style={inputStyle}
+                  value={newAdminEmail}
+                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                  placeholder="new-admin@drivenbyfaith.eu"
+                />
+                <input
+                  style={inputStyle}
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  placeholder="Temporary password"
+                  type="password"
+                />
+                <select style={inputStyle} value={newAdminRole} onChange={(e) => setNewAdminRole(e.target.value as AdminRole)}>
+                  <option value="OWNER">OWNER</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="SUPPORT">SUPPORT</option>
+                </select>
+                <button style={buttonStyle} type="submit" disabled={me?.role !== "OWNER"}>
+                  Add User
+                </button>
+              </form>
+
+              <ul style={{ display: "grid", gap: 8 }}>
+                {users.map((u) => (
+                  <li key={u.id} style={{ border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 10, padding: 10 }}>
+                    <strong>{u.email}</strong> | {u.role} | {u.isActive ? "ACTIVE" : "DISABLED"}
+                    <div style={{ fontSize: 12, color: color.muted, marginTop: 4 }}>
+                      Created: {new Date(u.createdAt).toLocaleString()} | Last login: {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "Never"}
                     </div>
                   </li>
                 ))}

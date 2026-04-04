@@ -25,6 +25,13 @@ const loginSchema = z.object({
   password: z.string().min(6)
 });
 
+const createAdminUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  role: z.enum(["OWNER", "ADMIN", "SUPPORT"]).optional(),
+  isActive: z.boolean().optional()
+});
+
 const createProductSchema = z.object({
   slug: z.string().trim().min(2),
   name: z.string().trim().min(2),
@@ -184,6 +191,72 @@ adminRouter.post("/admin/auth/login", async (req: Request, res: Response) => {
 
 adminRouter.get("/admin/me", requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   return res.status(200).json({ admin: req.admin });
+});
+
+adminRouter.get("/admin/users", requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
+  const users = await prisma.adminUser.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      isActive: true,
+      lastLoginAt: true,
+      createdAt: true
+    }
+  });
+
+  return res.status(200).json(users);
+});
+
+adminRouter.post("/admin/users", requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.admin?.role !== "OWNER") {
+    return res.status(403).json({ message: "Only OWNER can create admin users" });
+  }
+
+  const parsed = createAdminUserSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
+  }
+
+  const email = parsed.data.email.toLowerCase();
+
+  const existing = await prisma.adminUser.findUnique({ where: { email } });
+  if (existing) {
+    return res.status(409).json({ message: "Admin user with this email already exists" });
+  }
+
+  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+
+  const created = await prisma.adminUser.create({
+    data: {
+      email,
+      passwordHash,
+      role: (parsed.data.role ?? "ADMIN") as AdminRole,
+      isActive: parsed.data.isActive ?? true
+    },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      isActive: true,
+      createdAt: true
+    }
+  });
+
+  await writeAuditLog({
+    adminUserId: req.admin.id,
+    action: "CREATE",
+    entityType: "AdminUser",
+    entityId: created.id,
+    diffJson: {
+      email: created.email,
+      role: created.role,
+      isActive: created.isActive
+    }
+  });
+
+  return res.status(201).json(created);
 });
 
 adminRouter.get("/admin/products", requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
