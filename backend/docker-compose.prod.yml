@@ -1,11 +1,11 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: drivenbyfaith-backend
     env_file:
-      - ./backend/.env
+      - .env
     ports:
       - "4000:4000"
     restart: unless-stopped
