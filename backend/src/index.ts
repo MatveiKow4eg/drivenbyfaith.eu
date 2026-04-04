@@ -37,7 +37,7 @@ app.get("/health", (_req: Request, res: Response) => {
 
 app.get("/api/v1/meta", (_req: Request, res: Response) => {
   res.status(200).json({
-    currency: ["EUR", "USD"],
+    currency: ["EUR"],
     checkoutMode: "guest",
     pricingSource: "database"
   });

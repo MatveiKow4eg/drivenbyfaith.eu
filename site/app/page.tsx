@@ -15,14 +15,14 @@ const PRODUCTS: Product[] = [
     id: "midnight",
     name: "MIDNIGHT",
     mood: "Aggressive / Deep / Night",
-    price: "$34",
+    price: "€34",
     glow: "red",
   },
   {
     id: "sunrise",
     name: "SUNRISE",
     mood: "Clean / Warm / Smooth",
-    price: "$34",
+    price: "€34",
     glow: "amber",
   },
 ];

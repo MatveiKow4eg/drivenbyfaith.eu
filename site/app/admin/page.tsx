@@ -24,7 +24,7 @@ type AdminProduct = {
     color: string;
     isActive: boolean;
     inventory: { quantity: number; reservedQuantity: number } | null;
-    prices: Array<{ currency: "EUR" | "USD"; amountMinor: number; isActive: boolean }>;
+    prices: Array<{ currency: "EUR"; amountMinor: number; isActive: boolean }>;
   }>;
 };
 
@@ -34,7 +34,7 @@ type AdminOrder = {
   status: "PENDING" | "PAID" | "PROCESSING" | "SHIPPED" | "CANCELED" | "REFUNDED";
   email: string;
   totalMinor: number;
-  currency: "EUR" | "USD";
+  currency: "EUR";
   createdAt: string;
 };
 
@@ -66,6 +66,7 @@ type MeResponse = {
 type VariantSize = "S" | "M" | "L" | "XL" | "XXL" | "XXXL";
 type AdminTab = "products" | "orders" | "promos" | "users";
 type Toast = { id: number; text: string; kind: "success" | "error" };
+const SIZE_OPTIONS: readonly VariantSize[] = ["S", "M", "L", "XL", "XXL", "XXXL"];
 
 function deriveCategoryFromProduct(product: AdminProduct): string {
   const fromDb = product.category?.trim();
@@ -162,7 +163,6 @@ export default function AdminPage() {
   const [variantSku, setVariantSku] = useState("");
   const [variantInventory, setVariantInventory] = useState(20);
   const [variantEur, setVariantEur] = useState(3900);
-  const [variantUsd, setVariantUsd] = useState(4300);
   const [variantIsActive, setVariantIsActive] = useState(true);
 
   const [imagePath, setImagePath] = useState("/products/sunrise.png");
@@ -451,7 +451,6 @@ export default function AdminPage() {
         sku: variantSku,
         inventoryQty: variantInventory,
         priceEURMinor: variantEur,
-        priceUSDMinor: variantUsd,
         isActive: true
       })
     });
@@ -497,7 +496,7 @@ export default function AdminPage() {
 
     const response = await authedRequest(`/admin/variants/${selectedVariantId}/prices`, {
       method: "PUT",
-      body: JSON.stringify({ eurMinor: variantEur, usdMinor: variantUsd })
+      body: JSON.stringify({ eurMinor: variantEur })
     });
 
     if (!response.ok) {
@@ -775,9 +774,7 @@ export default function AdminPage() {
                       const variant = selectedProduct?.variants.find((v) => v.id === variantId);
                       if (variant) {
                         const eur = variant.prices.find((p) => p.currency === "EUR" && p.isActive);
-                        const usd = variant.prices.find((p) => p.currency === "USD" && p.isActive);
                         setVariantEur(eur?.amountMinor ?? 3900);
-                        setVariantUsd(usd?.amountMinor ?? 4300);
                         setVariantInventory(variant.inventory?.quantity ?? 0);
                         setVariantSku(variant.sku);
                         setVariantColor(variant.color);
@@ -799,18 +796,16 @@ export default function AdminPage() {
                   <form onSubmit={createVariant} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
                     <strong>Create Variant</strong>
                     <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
-                      <option>S</option>
-                      <option>M</option>
-                      <option>L</option>
-                      <option>XL</option>
-                      <option>XXL</option>
-                      <option>XXXL</option>
+                      {SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
                     </select>
                     <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
                     <input style={inputStyle} value={variantSku} onChange={(e) => setVariantSku(e.target.value)} placeholder="SKU" />
                     <input style={inputStyle} value={variantInventory} onChange={(e) => setVariantInventory(Number(e.target.value) || 0)} type="number" />
                     <input style={inputStyle} value={variantEur} onChange={(e) => setVariantEur(Number(e.target.value) || 0)} type="number" />
-                    <input style={inputStyle} value={variantUsd} onChange={(e) => setVariantUsd(Number(e.target.value) || 0)} type="number" />
                     <button style={buttonStyle} type="submit">
                       Create Variant
                     </button>
@@ -819,12 +814,11 @@ export default function AdminPage() {
                   <form onSubmit={updateSelectedVariantMeta} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
                     <strong>Edit Variant Meta</strong>
                     <select style={inputStyle} value={variantSize} onChange={(e) => setVariantSize(e.target.value as VariantSize)}>
-                      <option>S</option>
-                      <option>M</option>
-                      <option>L</option>
-                      <option>XL</option>
-                      <option>XXL</option>
-                      <option>XXXL</option>
+                      {SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
                     </select>
                     <input style={inputStyle} value={variantColor} onChange={(e) => setVariantColor(e.target.value)} placeholder="Color" />
                     <input style={inputStyle} value={variantSku} onChange={(e) => setVariantSku(e.target.value)} placeholder="SKU" />
@@ -839,11 +833,10 @@ export default function AdminPage() {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start", marginTop: 12 }}>
                   <form onSubmit={updateSelectedVariantPrices} style={{ display: "grid", gap: 8, border: `1px solid ${color.border}`, background: color.cardSoft, borderRadius: 12, padding: 12 }}>
-                    <strong>Update Prices</strong>
+                    <strong>Update Price (EUR)</strong>
                     <input style={inputStyle} value={variantEur} onChange={(e) => setVariantEur(Number(e.target.value) || 0)} type="number" />
-                    <input style={inputStyle} value={variantUsd} onChange={(e) => setVariantUsd(Number(e.target.value) || 0)} type="number" />
                     <button style={buttonStyle} type="submit">
-                      Save Prices
+                      Save EUR Price
                     </button>
                   </form>
 

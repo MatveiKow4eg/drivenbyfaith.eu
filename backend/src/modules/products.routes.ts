@@ -5,8 +5,8 @@ import { prisma } from "../db.js";
 const productsRouter = Router();
 
 function pickActivePrice(
-  prices: Array<{ currency: "EUR" | "USD"; amountMinor: number; isActive: boolean; validFrom: Date | null; validTo: Date | null }>,
-  currency: "EUR" | "USD",
+  prices: Array<{ currency: string; amountMinor: number; isActive: boolean; validFrom: Date | null; validTo: Date | null }>,
+  currency: "EUR",
   now: Date
 ) {
   return prices.find(
@@ -19,7 +19,7 @@ function pickActivePrice(
 }
 
 productsRouter.get("/products", async (req: Request, res: Response) => {
-  const currency = (req.query.currency === "USD" ? "USD" : "EUR") as "EUR" | "USD";
+  const currency = "EUR" as const;
   const now = new Date();
 
   const products = await prisma.product.findMany({
@@ -85,7 +85,7 @@ productsRouter.get("/products", async (req: Request, res: Response) => {
 productsRouter.get("/products/:slug", async (req: Request, res: Response) => {
   const rawSlug = req.params.slug;
   const slug = Array.isArray(rawSlug) ? rawSlug[0] : rawSlug;
-  const currency = (req.query.currency === "USD" ? "USD" : "EUR") as "EUR" | "USD";
+  const currency = "EUR" as const;
   const now = new Date();
 
   if (!slug) {

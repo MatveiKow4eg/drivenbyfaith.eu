@@ -6,21 +6,20 @@ type VariantSeed = {
   color: string;
   sku: string;
   eur: number;
-  usd: number;
   stock: number;
 };
 
 const variants: VariantSeed[] = [
-  { size: "S", color: "Black", sku: "DBF-TEE-BLK-S", eur: 3900, usd: 4300, stock: 25 },
-  { size: "M", color: "Black", sku: "DBF-TEE-BLK-M", eur: 3900, usd: 4300, stock: 25 },
-  { size: "L", color: "Black", sku: "DBF-TEE-BLK-L", eur: 3900, usd: 4300, stock: 25 },
-  { size: "XL", color: "Black", sku: "DBF-TEE-BLK-XL", eur: 3900, usd: 4300, stock: 20 },
-  { size: "XXL", color: "Black", sku: "DBF-TEE-BLK-XXL", eur: 4200, usd: 4600, stock: 15 },
-  { size: "XXXL", color: "Black", sku: "DBF-TEE-BLK-XXXL", eur: 4400, usd: 4800, stock: 10 },
-  { size: "S", color: "White", sku: "DBF-TEE-WHT-S", eur: 3900, usd: 4300, stock: 20 },
-  { size: "M", color: "White", sku: "DBF-TEE-WHT-M", eur: 3900, usd: 4300, stock: 20 },
-  { size: "L", color: "White", sku: "DBF-TEE-WHT-L", eur: 3900, usd: 4300, stock: 20 },
-  { size: "XL", color: "White", sku: "DBF-TEE-WHT-XL", eur: 3900, usd: 4300, stock: 15 }
+  { size: "S", color: "Black", sku: "DBF-TEE-BLK-S", eur: 3900, stock: 25 },
+  { size: "M", color: "Black", sku: "DBF-TEE-BLK-M", eur: 3900, stock: 25 },
+  { size: "L", color: "Black", sku: "DBF-TEE-BLK-L", eur: 3900, stock: 25 },
+  { size: "XL", color: "Black", sku: "DBF-TEE-BLK-XL", eur: 3900, stock: 20 },
+  { size: "XXL", color: "Black", sku: "DBF-TEE-BLK-XXL", eur: 4200, stock: 15 },
+  { size: "XXXL", color: "Black", sku: "DBF-TEE-BLK-XXXL", eur: 4400, stock: 10 },
+  { size: "S", color: "White", sku: "DBF-TEE-WHT-S", eur: 3900, stock: 20 },
+  { size: "M", color: "White", sku: "DBF-TEE-WHT-M", eur: 3900, stock: 20 },
+  { size: "L", color: "White", sku: "DBF-TEE-WHT-L", eur: 3900, stock: 20 },
+  { size: "XL", color: "White", sku: "DBF-TEE-WHT-XL", eur: 3900, stock: 15 }
 ];
 
 async function seedProductAndVariants() {
@@ -109,15 +108,6 @@ async function seedProductAndVariants() {
         isActive: true
       }
     });
-
-    await prisma.price.create({
-      data: {
-        variantId: savedVariant.id,
-        currency: "USD",
-        amountMinor: variant.usd,
-        isActive: true
-      }
-    });
   }
 
   return { productId: product.id, variantIds: createdVariantIds };
@@ -158,26 +148,6 @@ async function seedShipping() {
           zoneId: zone.id,
           currency: "EUR",
           minOrderMinor: 10000,
-          maxOrderMinor: 99999999,
-          amountMinor: 0,
-          estimatedDaysMin: 3,
-          estimatedDaysMax: 7,
-          isActive: true
-        },
-        {
-          zoneId: zone.id,
-          currency: "USD",
-          minOrderMinor: 0,
-          maxOrderMinor: 10999,
-          amountMinor: 800,
-          estimatedDaysMin: 3,
-          estimatedDaysMax: 7,
-          isActive: true
-        },
-        {
-          zoneId: zone.id,
-          currency: "USD",
-          minOrderMinor: 11000,
           maxOrderMinor: 99999999,
           amountMinor: 0,
           estimatedDaysMin: 3,

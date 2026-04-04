@@ -9,7 +9,7 @@ import { prisma } from "../db.js";
 const adminRouter = Router();
 
 type AdminRole = "OWNER" | "ADMIN" | "SUPPORT";
-type CurrencyCode = "EUR" | "USD";
+type CurrencyCode = "EUR";
 type VariantSize = "S" | "M" | "L" | "XL" | "XXL" | "XXXL";
 
 type AuthenticatedRequest = Request & {
@@ -62,8 +62,7 @@ const createVariantSchema = z.object({
   sku: z.string().trim().min(2),
   isActive: z.boolean().optional(),
   inventoryQty: z.number().int().min(0).default(0),
-  priceEURMinor: z.number().int().positive(),
-  priceUSDMinor: z.number().int().positive()
+  priceEURMinor: z.number().int().positive()
 });
 
 const updateVariantSchema = z.object({
@@ -74,8 +73,7 @@ const updateVariantSchema = z.object({
 });
 
 const setPricesSchema = z.object({
-  eurMinor: z.number().int().positive(),
-  usdMinor: z.number().int().positive()
+  eurMinor: z.number().int().positive()
 });
 
 const setInventorySchema = z.object({
@@ -91,7 +89,7 @@ const createPromoSchema = z.object({
   code: z.string().trim().min(3).transform((v) => v.toUpperCase()),
   type: z.enum(["PERCENT", "FIXED"]),
   value: z.number().int().positive(),
-  currency: z.enum(["EUR", "USD"]).optional(),
+  currency: z.enum(["EUR"]).optional(),
   minOrderAmountMinor: z.number().int().min(0).optional(),
   maxDiscountMinor: z.number().int().min(0).optional(),
   usageLimit: z.number().int().positive().optional(),
@@ -424,12 +422,6 @@ adminRouter.post("/admin/variants", requireAdmin, async (req: AuthenticatedReque
         currency: "EUR" as CurrencyCode,
         amountMinor: parsed.data.priceEURMinor,
         isActive: true
-      },
-      {
-        variantId: created.id,
-        currency: "USD" as CurrencyCode,
-        amountMinor: parsed.data.priceUSDMinor,
-        isActive: true
       }
     ]
   });
@@ -491,7 +483,7 @@ adminRouter.put("/admin/variants/:id/prices", requireAdmin, async (req: Authenti
   await prisma.price.updateMany({
     where: {
       variantId: id,
-      currency: { in: ["EUR", "USD"] }
+      currency: { in: ["EUR"] }
     },
     data: { isActive: false }
   });
@@ -502,12 +494,6 @@ adminRouter.put("/admin/variants/:id/prices", requireAdmin, async (req: Authenti
         variantId: id,
         currency: "EUR" as CurrencyCode,
         amountMinor: parsed.data.eurMinor,
-        isActive: true
-      },
-      {
-        variantId: id,
-        currency: "USD" as CurrencyCode,
-        amountMinor: parsed.data.usdMinor,
         isActive: true
       }
     ]

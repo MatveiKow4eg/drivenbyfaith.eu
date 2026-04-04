@@ -7,10 +7,9 @@ import { prisma } from "../db.js";
 
 const checkoutRouter = Router();
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
-type CurrencyCode = "EUR" | "USD";
+type CurrencyCode = "EUR";
 
 const quoteSchema = z.object({
-  currency: z.enum(["EUR", "USD"]),
   countryCode: z.string().trim().length(2).transform((val) => val.toUpperCase()),
   promoCode: z.string().trim().min(1).optional(),
   items: z
@@ -47,7 +46,7 @@ function calculatePromoDiscount(input: {
   promo: {
     type: "PERCENT" | "FIXED";
     value: number;
-    currency: CurrencyCode | null;
+    currency: string | null;
     minOrderAmountMinor: number | null;
     maxDiscountMinor: number | null;
   };
@@ -88,7 +87,8 @@ function generateOrderNumber() {
 }
 
 async function computeQuote(input: z.infer<typeof quoteSchema>) {
-  const { currency, countryCode, promoCode, items } = input;
+  const { countryCode, promoCode, items } = input;
+  const currency: CurrencyCode = "EUR";
   const now = new Date();
 
   const variants = await prisma.productVariant.findMany({
