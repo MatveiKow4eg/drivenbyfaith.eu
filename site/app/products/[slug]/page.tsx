@@ -258,6 +258,8 @@ export default function ProductPage() {
     .map((v) => v.color)
     .filter((c, i, a) => a.indexOf(c) === i);
 
+  const sceneGlow = selectedVariant?.color.toLowerCase().includes("black") ? "red" : "amber";
+
   return (
     <main className="dbf-experience dbf-product-page">
       {previewSrc ? (
@@ -266,42 +268,50 @@ export default function ProductPage() {
         </div>
       ) : null}
 
-      <header className="dbf-product-header">
-        <div className="hero-logo" aria-label="Driven By Faith logo">
-          <span className="hero-logo-top">DRIVEN BY</span>
-          <span className="hero-logo-btm">
-            {"FAITH".split("").map((l, i) => <span key={i}>{l}</span>)}
-          </span>
+      <section className="hero" aria-label="Driven By Faith hero">
+        <div className="hero-copy">
+          <div className="hero-logo" aria-label="Driven By Faith logo">
+            <span className="hero-logo-top">DRIVEN BY</span>
+            <span className="hero-logo-btm">
+              {"FAITH".split("").map((l, i) => <span key={i}>{l}</span>)}
+            </span>
+          </div>
+          <nav className="hero-nav" aria-label="Main navigation">
+            <a href="/">Home</a>
+            <a href="#product">Shop</a>
+            <a href="#product">Product</a>
+            <a href="#contact">Contact</a>
+          </nav>
+          <h1>Driven by faith</h1>
+          <button className="cta-primary" onClick={() => router.push("#product")}>VIEW PRODUCT</button>
         </div>
-        <nav className="hero-nav" aria-label="Main navigation">
-          <a href="/">Home</a>
-          <a href="/#scents">Shop</a>
-          <a href="#product-details">Details</a>
-          <a href="#product-sections">Info</a>
-        </nav>
-        <button className="dbf-cart-toggle" onClick={() => setCartOpen(true)}>
-          CART ({cartCount})
-        </button>
-      </header>
+      </section>
 
-      <section className="dbf-product-shell" id="product-details">
-        <button onClick={() => router.back()} className="dbf-back-btn">
-          ← Back
-        </button>
-
-        <div className="dbf-product-grid">
-          <div className="dbf-product-gallery">
+      <section id="product" className="product-selection" aria-label="Product details">
+        <article className={`product-scene ${sceneGlow}`} aria-label={`${product.name} image`}>
+          <div className="scene-bg-glow" aria-hidden="true" />
+          <div className="product-visual" aria-hidden="true" onClick={() => mainImage && setPreviewSrc(resolveImageSrc(mainImage.path))}>
             {mainImage ? (
-              <div className="dbf-main-image-wrap" onClick={() => setPreviewSrc(resolveImageSrc(mainImage.path))}>
-                <img
-                  src={resolveImageSrc(mainImage.path)}
-                  alt={mainImage.alt ?? product.name}
-                  className="dbf-main-image"
-                />
-              </div>
+              <img src={resolveImageSrc(mainImage.path)} alt={mainImage.alt ?? product.name} className="product-img" />
             ) : (
-              <div className="dbf-main-image-empty">No image</div>
+              <div style={{ width: "100%", height: "100%", background: "#111" }} />
             )}
+          </div>
+          <div className="scene-card-info">
+            <p className="scene-mini-title">{product.name}</p>
+            {selectedVariant ? <p className="scene-mini-price">{fmt(selectedVariant.price.amountMinor)} EUR</p> : null}
+          </div>
+        </article>
+
+        <article className="product-scene amber" aria-label="Product controls" style={{ alignItems: "stretch" }}>
+          <div className="dbf-product-control-card">
+            <div className="dbf-product-control-head">
+              <button onClick={() => router.back()} className="dbf-back-btn">← Back</button>
+              <button className="dbf-cart-toggle in-panel" onClick={() => setCartOpen(true)}>CART ({cartCount})</button>
+            </div>
+
+            <h2 className="dbf-product-name">{product.name}</h2>
+            {product.description ? <p className="dbf-product-description">{product.description}</p> : null}
 
             {product.images.length > 1 ? (
               <div className="dbf-thumb-list">
@@ -316,61 +326,56 @@ export default function ProductPage() {
                 ))}
               </div>
             ) : null}
-          </div>
 
-          <div className="dbf-product-info">
-            <h1>{product.name}</h1>
-            {product.description ? <p className="dbf-product-description">{product.description}</p> : null}
-
-            {selectedVariant ? <div className="dbf-product-price">{fmt(selectedVariant.price.amountMinor)} EUR</div> : null}
-
-            <div>
-              <p className="dbf-picker-label">Size</p>
-              <div className="dbf-picker-row">
-                {sizes.map((size) => {
-                  const variantForSize =
-                    product.variants.find((v) => v.size === size && (!selectedVariant || v.color === selectedVariant.color)) ??
-                    product.variants.find((v) => v.size === size);
-                  const active = selectedVariant?.size === size;
-                  const outOfStock = !variantForSize || variantForSize.stock === 0;
-                  return (
-                    <button
-                      key={size}
-                      disabled={outOfStock}
-                      onClick={() => {
-                        if (variantForSize) setSelectedVariantId(variantForSize.id);
-                      }}
-                      className={`dbf-pill-btn size ${active ? "active" : ""}`}
-                    >
-                      {size}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {colorsForSelectedSize.length > 1 ? (
+            <div className="dbf-product-selectors">
               <div>
-                <p className="dbf-picker-label">Color</p>
+                <p className="dbf-picker-label">Size</p>
                 <div className="dbf-picker-row">
-                  {colorsForSelectedSize.map((color) => {
-                    const v = product.variants.find((x) => x.color === color && (!selectedVariant || x.size === selectedVariant.size));
-                    const active = selectedVariant?.color === color;
+                  {sizes.map((size) => {
+                    const variantForSize =
+                      product.variants.find((v) => v.size === size && (!selectedVariant || v.color === selectedVariant.color)) ??
+                      product.variants.find((v) => v.size === size);
+                    const active = selectedVariant?.size === size;
+                    const outOfStock = !variantForSize || variantForSize.stock === 0;
                     return (
                       <button
-                        key={color}
+                        key={size}
+                        disabled={outOfStock}
                         onClick={() => {
-                          if (v) setSelectedVariantId(v.id);
+                          if (variantForSize) setSelectedVariantId(variantForSize.id);
                         }}
-                        className={`dbf-pill-btn ${active ? "active" : ""}`}
+                        className={`dbf-pill-btn size ${active ? "active" : ""}`}
                       >
-                        {color}
+                        {size}
                       </button>
                     );
                   })}
                 </div>
               </div>
-            ) : null}
+
+              {colorsForSelectedSize.length > 1 ? (
+                <div>
+                  <p className="dbf-picker-label">Color</p>
+                  <div className="dbf-picker-row">
+                    {colorsForSelectedSize.map((color) => {
+                      const v = product.variants.find((x) => x.color === color && (!selectedVariant || x.size === selectedVariant.size));
+                      const active = selectedVariant?.color === color;
+                      return (
+                        <button
+                          key={color}
+                          onClick={() => {
+                            if (v) setSelectedVariantId(v.id);
+                          }}
+                          className={`dbf-pill-btn ${active ? "active" : ""}`}
+                        >
+                          {color}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
             {selectedVariant ? (
               <p className={`dbf-stock ${selectedVariant.stock > 0 ? "in" : "out"}`}>
@@ -378,11 +383,7 @@ export default function ProductPage() {
               </p>
             ) : null}
 
-            <button
-              className="dbf-add-btn"
-              disabled={!selectedVariant || selectedVariant.stock <= 0}
-              onClick={addToCart}
-            >
+            <button className="dbf-add-btn" disabled={!selectedVariant || selectedVariant.stock <= 0} onClick={addToCart}>
               {!selectedVariant || selectedVariant.stock <= 0 ? "OUT OF STOCK" : "ADD TO CART"}
             </button>
 
@@ -394,8 +395,17 @@ export default function ProductPage() {
               </div>
             ) : null}
           </div>
-        </div>
+        </article>
       </section>
+
+      <footer id="contact" className="art-footer">
+        <p className="footer-brand">DRIVEN BY FAITH</p>
+        <div className="footer-links">
+          <a href="#" aria-label="Instagram">INSTAGRAM</a>
+          <a href="#" aria-label="TikTok">TIKTOK</a>
+          <a href="#" aria-label="Contact">CONTACT</a>
+        </div>
+      </footer>
 
       <aside className={`dbf-cart-drawer ${cartOpen ? "open" : ""}`} aria-label="Cart drawer">
         <div className="dbf-cart-head">

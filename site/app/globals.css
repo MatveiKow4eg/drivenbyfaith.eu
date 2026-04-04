@@ -622,6 +622,41 @@ body {
   color: var(--text);
 }
 
+.dbf-product-page .product-selection {
+  margin-top: 0;
+}
+
+.dbf-product-control-card {
+  width: min(92%, 620px);
+  margin: auto;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: var(--panel);
+  border-radius: 14px;
+  padding: clamp(1rem, 3vw, 1.6rem);
+  backdrop-filter: blur(8px);
+}
+
+.dbf-product-control-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.dbf-product-name {
+  margin: 0;
+  font-family: var(--font-headline), sans-serif;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  line-height: 0.92;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dbf-product-selectors {
+  margin-top: 10px;
+}
+
 .dbf-product-header {
   position: sticky;
   top: 0;
@@ -653,6 +688,12 @@ body {
   font-size: 0.72rem;
   padding: 0.6rem 0.78rem;
   cursor: pointer;
+}
+
+.dbf-cart-toggle.in-panel {
+  position: static;
+  right: auto;
+  top: auto;
 }
 
 .dbf-product-shell {
@@ -1112,6 +1153,10 @@ body {
 
   .dbf-product-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dbf-product-control-card {
+    width: 100%;
   }
 }
 
