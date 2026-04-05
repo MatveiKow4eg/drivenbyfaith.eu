@@ -268,6 +268,21 @@ export default function ProductPage() {
         </div>
       ) : null}
 
+      <button
+        className="dbf-cart-toggle"
+        onClick={() => setCartOpen(true)}
+        aria-label={`Open cart (${cartCount} items)`}
+      >
+        <span className="dbf-cart-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 5H5L7.4 15.4C7.53 15.96 8.03 16.35 8.61 16.35H17.8C18.34 16.35 18.82 16 19 15.49L21 9.6C21.27 8.83 20.7 8.03 19.88 8.03H7.06" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="9.2" cy="19.2" r="1.6" fill="currentColor" />
+            <circle cx="17.2" cy="19.2" r="1.6" fill="currentColor" />
+          </svg>
+        </span>
+        <span className="dbf-cart-count" aria-hidden="true">{cartCount}</span>
+      </button>
+
       <section className="hero" aria-label="Driven By Faith hero">
         <div className="hero-copy">
           <div className="hero-logo" aria-label="Driven By Faith logo">
@@ -281,20 +296,6 @@ export default function ProductPage() {
             <a href="/#scents">New</a>
             <a href="/#contact">Community</a>
             <a href="/#contact">Contact</a>
-            <button
-              className="dbf-cart-toggle"
-              onClick={() => setCartOpen(true)}
-              aria-label={`Open cart (${cartCount} items)`}
-            >
-              <span className="dbf-cart-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 5H5L7.4 15.4C7.53 15.96 8.03 16.35 8.61 16.35H17.8C18.34 16.35 18.82 16 19 15.49L21 9.6C21.27 8.83 20.7 8.03 19.88 8.03H7.06" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="9.2" cy="19.2" r="1.6" fill="currentColor" />
-                  <circle cx="17.2" cy="19.2" r="1.6" fill="currentColor" />
-                </svg>
-              </span>
-              <span className="dbf-cart-count" aria-hidden="true">{cartCount}</span>
-            </button>
           </nav>
         </div>
       </section>
