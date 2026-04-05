@@ -246,9 +246,9 @@ body {
 }
 
 .product-img {
-  width: clamp(460px, 72vw, 1000px);
+  width: clamp(560px, 88vw, 1200px);
   height: auto;
-  max-height: clamp(580px, 82vh, 1050px);
+  max-height: clamp(680px, 92vh, 1200px);
   object-fit: contain;
   object-position: center;
 }
@@ -637,7 +637,7 @@ body {
 }
 
 .dbf-product-page .product-selection {
-  margin-top: -12vh;
+  margin-top: -26vh;
   background: transparent;
   position: relative;
   z-index: 2;
