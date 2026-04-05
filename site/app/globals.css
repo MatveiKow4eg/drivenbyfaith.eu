@@ -1298,6 +1298,11 @@ body {
 
   .dbf-checkout-summary {
     position: static;
+    order: 1;
+  }
+
+  .dbf-checkout-form-wrap {
+    order: 2;
   }
 }
 
@@ -1465,16 +1470,6 @@ body {
     margin-bottom: 1.2rem;
   }
 
-  /* Order summary shows first on mobile */
-  .dbf-checkout-form-wrap {
-    order: 2;
-  }
-
-  .dbf-checkout-summary {
-    order: 1;
-    position: static;
-  }
-
   .dbf-checkout-form-wrap,
   .dbf-checkout-summary {
     padding: 0.9rem;
@@ -1616,6 +1611,7 @@ body {
   border-radius: 14px;
   padding: clamp(1rem, 3vw, 1.6rem);
   backdrop-filter: blur(8px);
+  order: 1;
 }
 
 .dbf-checkout-summary {
@@ -1626,6 +1622,7 @@ body {
   backdrop-filter: blur(8px);
   position: sticky;
   top: 1.5rem;
+  order: 2;
 }
 
 .dbf-checkout-items {

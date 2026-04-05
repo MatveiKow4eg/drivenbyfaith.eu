@@ -277,6 +277,63 @@ export default function CheckoutPage() {
         ) : (
           <div className="dbf-checkout-grid">
 
+            <section className="dbf-checkout-summary">
+              <h2 className="dbf-checkout-section-head">Order summary</h2>
+              <div className="dbf-checkout-items">
+                {cartItems.map((item) => (
+                  <div key={item.variantId} className="dbf-checkout-item">
+                    {item.imagePath ? (
+                      <img
+                        src={resolveImageSrc(item.imagePath)}
+                        alt={item.name}
+                        className="dbf-checkout-item-img"
+                      />
+                    ) : null}
+                    <div className="dbf-checkout-item-info">
+                      <p>{item.name}</p>
+                      <p className="dbf-cart-item-meta">
+                        {item.size} / {item.color} × {item.qty}
+                      </p>
+                    </div>
+                    <strong>{fmt(item.unitPriceMinor * item.qty)} EUR</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="dbf-subtotal-row">
+                <span>Subtotal</span>
+                <strong>{fmt(subtotal)} EUR</strong>
+              </div>
+              {quoteLoading && <p className="dbf-quote-loading">Calculating shipping…</p>}
+              {quote && !quoteLoading && (
+                <>
+                  <div className="dbf-subtotal-row">
+                    <span>
+                      Shipping
+                      {quote.shippingEstimateDays
+                        ? ` (${quote.shippingEstimateDays.min}–${quote.shippingEstimateDays.max} days)`
+                        : ""}
+                    </span>
+                    <strong>{quote.shippingMinor === 0 ? "Free" : `${fmt(quote.shippingMinor)} EUR`}</strong>
+                  </div>
+                  <div className="dbf-subtotal-row dbf-total-row">
+                    <span>Total</span>
+                    <strong>{fmt(quote.totalMinor)} EUR</strong>
+                  </div>
+                </>
+              )}
+              {quoteError && <p className="dbf-checkout-error">{quoteError}</p>}
+
+              {error ? <p className="dbf-checkout-error">{error}</p> : null}
+
+              <button
+                className="dbf-checkout-btn"
+                disabled={loading || !countryCode}
+                onClick={handleSubmit}
+              >
+                {loading ? "Creating session…" : !countryCode ? "Enter your address first" : "Proceed to payment"}
+              </button>
+            </section>
+
             <section className="dbf-checkout-form-wrap">
               <h2 className="dbf-checkout-section-head">Delivery details</h2>
               <div className="dbf-form-grid">
@@ -350,63 +407,6 @@ export default function CheckoutPage() {
                   onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                 />
               </div>
-            </section>
-
-            <section className="dbf-checkout-summary">
-              <h2 className="dbf-checkout-section-head">Order summary</h2>
-              <div className="dbf-checkout-items">
-                {cartItems.map((item) => (
-                  <div key={item.variantId} className="dbf-checkout-item">
-                    {item.imagePath ? (
-                      <img
-                        src={resolveImageSrc(item.imagePath)}
-                        alt={item.name}
-                        className="dbf-checkout-item-img"
-                      />
-                    ) : null}
-                    <div className="dbf-checkout-item-info">
-                      <p>{item.name}</p>
-                      <p className="dbf-cart-item-meta">
-                        {item.size} / {item.color} × {item.qty}
-                      </p>
-                    </div>
-                    <strong>{fmt(item.unitPriceMinor * item.qty)} EUR</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="dbf-subtotal-row">
-                <span>Subtotal</span>
-                <strong>{fmt(subtotal)} EUR</strong>
-              </div>
-              {quoteLoading && <p className="dbf-quote-loading">Calculating shipping…</p>}
-              {quote && !quoteLoading && (
-                <>
-                  <div className="dbf-subtotal-row">
-                    <span>
-                      Shipping
-                      {quote.shippingEstimateDays
-                        ? ` (${quote.shippingEstimateDays.min}–${quote.shippingEstimateDays.max} days)`
-                        : ""}
-                    </span>
-                    <strong>{quote.shippingMinor === 0 ? "Free" : `${fmt(quote.shippingMinor)} EUR`}</strong>
-                  </div>
-                  <div className="dbf-subtotal-row dbf-total-row">
-                    <span>Total</span>
-                    <strong>{fmt(quote.totalMinor)} EUR</strong>
-                  </div>
-                </>
-              )}
-              {quoteError && <p className="dbf-checkout-error">{quoteError}</p>}
-
-              {error ? <p className="dbf-checkout-error">{error}</p> : null}
-
-              <button
-                className="dbf-checkout-btn"
-                disabled={loading || !countryCode}
-                onClick={handleSubmit}
-              >
-                {loading ? "Creating session…" : !countryCode ? "Enter your address first" : "Proceed to payment"}
-              </button>
             </section>
 
           </div>

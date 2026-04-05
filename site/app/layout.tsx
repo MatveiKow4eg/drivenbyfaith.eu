@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Chakra_Petch, Teko } from "next/font/google";
 import "./globals.css";
 
@@ -17,6 +17,11 @@ const body = Chakra_Petch({
 export const metadata: Metadata = {
   title: "Driven By Faith",
   description: "Driven By Faith",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
