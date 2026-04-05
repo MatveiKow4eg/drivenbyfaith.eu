@@ -76,6 +76,11 @@ function resolveImageSrc(path: string): string {
   return `${API_ORIGIN}/${path}`;
 }
 
+function extractPostalCode(text: string): string {
+  const match = text.match(/\b[0-9]{3,10}(?:-[0-9]{3,10})?\b/);
+  return match ? match[0] : "";
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -85,14 +90,10 @@ export default function CheckoutPage() {
 
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [matchedAddress, setMatchedAddress] = useState("");
   const [line1, setLine1] = useState("");
-  const [line2, setLine2] = useState("");
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
-  const [district, setDistrict] = useState("");
-  const [county, setCounty] = useState("");
-  const [region, setRegion] = useState("");
+  const [regionName, setRegionName] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [countryName, setCountryName] = useState("");
 
@@ -140,7 +141,6 @@ export default function CheckoutPage() {
   }, [fetchQuote]);
 
   const searchAddress = (value: string) => {
-    setMatchedAddress(value);
     setLine1(value);
     setSuggestions([]);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -179,17 +179,15 @@ export default function CheckoutPage() {
       resolvedDistrict,
       [a.postcode, resolvedCounty].filter(Boolean).join(" "),
       resolvedRegion,
-    ]
-      .filter(Boolean)
-      .join(", ");
+    ].filter(Boolean).join(", ");
 
-    setMatchedAddress(item.display_name);
-    setLine1(compactLine1);
-    setCity(resolvedCity);
-    setPostalCode(a.postcode ?? "");
-    setDistrict(resolvedDistrict);
-    setCounty(resolvedCounty);
-    setRegion(resolvedRegion);
+    const parsedPostal = extractPostalCode(item.display_name);
+    const fallbackCity = resolvedCounty || resolvedRegion;
+
+    setLine1(item.display_name || compactLine1);
+    setCity(resolvedCity || fallbackCity);
+    setPostalCode(a.postcode ?? parsedPostal);
+    setRegionName([resolvedRegion, resolvedCounty].filter(Boolean).join(", "));
     setCountryCode(resolvedCountry);
     setCountryName(COUNTRY_NAMES[resolvedCountry] ?? resolvedCountry);
     setSuggestionsOpen(false);
@@ -199,6 +197,32 @@ export default function CheckoutPage() {
 
   const handleSubmit = async () => {
     if (cartItems.length === 0 || loading || !countryCode) return;
+
+    const safeAddress = line1.trim();
+    const safeCity = city.trim();
+    const safePostal = postalCode.trim();
+    const safeCountry = countryCode.trim().toUpperCase();
+
+    if (!safeAddress) {
+      setError("Address is required");
+      return;
+    }
+
+    if (!safeCity) {
+      setError("City is required");
+      return;
+    }
+
+    if (!safePostal) {
+      setError("Postal code is required");
+      return;
+    }
+
+    if (!safeCountry) {
+      setError("Country is required");
+      return;
+    }
+
     setError(null);
     setLoading(true);
     try {
@@ -207,18 +231,18 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         
         body: JSON.stringify({
-          countryCode: countryCode.toUpperCase(),
+          countryCode: safeCountry,
           promoCode: promoCode.trim() || undefined,
           items: cartItems.map((item) => ({ variantId: item.variantId, qty: item.qty })),
           customer: {
             email: email.trim(),
             fullName: fullName.trim(),
             address: {
-              line1: line1.trim(),
-              line2: [line2.trim(), district.trim(), county.trim(), region.trim()].filter(Boolean).join(", ") || undefined,
-              city: city.trim(),
-              postalCode: postalCode.trim(),
-              countryCode: countryCode.toUpperCase(),
+              line1: safeAddress,
+              line2: regionName.trim() || undefined,
+              city: safeCity,
+              postalCode: safePostal,
+              countryCode: safeCountry,
             },
           },
           successUrl: `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -267,14 +291,9 @@ export default function CheckoutPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
-                <input
-                  placeholder="Address from search (auto)"
-                  value={matchedAddress}
-                  onChange={(e) => setMatchedAddress(e.target.value)}
-                />
                 <div className="dbf-autocomplete-wrap">
                   <input
-                    placeholder="Start typing your address…"
+                    placeholder="Address"
                     value={line1}
                     autoComplete="off"
                     onChange={(e) => searchAddress(e.target.value)}
@@ -291,52 +310,28 @@ export default function CheckoutPage() {
                     </ul>
                   )}
                 </div>
-                <input
-                  placeholder="Apartment, suite… (optional)"
-                  value={line2}
-                  onChange={(e) => setLine2(e.target.value)}
-                />
-                <input
-                  placeholder="District / Area"
-                  value={district}
-                  onChange={(e) => setDistrict(e.target.value)}
-                />
-                <input
-                  placeholder="City"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-                <input
-                  placeholder="Postal Code"
-                  value={postalCode}
-                  onChange={(e) => setPostalCode(e.target.value)}
-                />
-                <input
-                  placeholder="County"
-                  value={county}
-                  onChange={(e) => setCounty(e.target.value)}
-                />
-                <input
-                  placeholder="Region / State"
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value)}
-                />
                 {countryCode && (
                   <div className="dbf-country-badge">
                     <span className="dbf-country-flag">{countryCode}</span>
-                    <span>{countryName || countryCode}</span>
+                    <span>Country: {countryName || countryCode}</span>
                     <button
                       className="dbf-country-clear"
                       onClick={() => {
                         setCountryCode("");
                         setCountryName("");
-                        setDistrict("");
-                        setCounty("");
-                        setRegion("");
+                        setRegionName("");
+                        setCity("");
+                        setPostalCode("");
                         setQuote(null);
                       }}
                       type="button"
                     >×</button>
+                  </div>
+                )}
+                {regionName && (
+                  <div className="dbf-country-badge">
+                    <span className="dbf-country-flag">RG</span>
+                    <span>Region: {regionName}</span>
                   </div>
                 )}
                 <input
