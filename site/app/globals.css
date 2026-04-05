@@ -1786,6 +1786,73 @@ body {
   color: #fff3e3;
 }
 
+/* Checkout mobile overrides (must be below base checkout styles) */
+@media (max-width: 980px) {
+  .dbf-checkout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dbf-checkout-summary {
+    position: static;
+    order: 1;
+  }
+
+  .dbf-checkout-form-wrap {
+    order: 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .dbf-checkout-shell {
+    padding: 1.2rem 0.9rem 4rem;
+  }
+
+  .dbf-checkout-title {
+    font-size: clamp(2.2rem, 11vw, 3.5rem);
+    margin-bottom: 1.2rem;
+  }
+
+  .dbf-checkout-form-wrap,
+  .dbf-checkout-summary {
+    padding: 0.9rem;
+    border-radius: 12px;
+  }
+
+  .dbf-checkout-item {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dbf-checkout-item-img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .dbf-checkout-item strong {
+    margin-left: auto;
+  }
+
+  .dbf-form-grid {
+    gap: 10px;
+  }
+
+  .dbf-form-grid input {
+    height: 48px;
+    font-size: 1rem;
+    border-radius: 10px;
+  }
+
+  .dbf-autocomplete-list {
+    max-height: 200px;
+  }
+}
+
+@media (max-width: 420px) {
+  .dbf-checkout-title {
+    font-size: clamp(1.9rem, 12vw, 3rem);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
