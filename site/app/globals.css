@@ -1465,20 +1465,55 @@ body {
     margin-bottom: 1.2rem;
   }
 
+  /* Order summary shows first on mobile */
+  .dbf-checkout-form-wrap {
+    order: 2;
+  }
+
+  .dbf-checkout-summary {
+    order: 1;
+    position: static;
+  }
+
   .dbf-checkout-form-wrap,
   .dbf-checkout-summary {
     padding: 0.9rem;
     border-radius: 12px;
   }
 
+  /* Checkout item row: stack name below image on very narrow */
+  .dbf-checkout-item {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dbf-checkout-item-img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .dbf-checkout-item strong {
+    margin-left: auto;
+  }
+
+  .dbf-form-grid {
+    gap: 10px;
+  }
+
   .dbf-form-grid input {
-    height: 46px;
+    height: 48px;
     font-size: 1rem;
+    border-radius: 10px;
+  }
+
+  .dbf-autocomplete-list {
+    max-height: 200px;
   }
 
   .dbf-checkout-btn {
     min-height: 52px;
     font-size: 1rem;
+    padding: 15px 16px;
   }
 
   .dbf-autocomplete-list li {
