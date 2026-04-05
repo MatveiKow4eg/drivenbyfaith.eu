@@ -194,7 +194,7 @@ body {
 
 .hero-copy h1 {
   width: 100%;
-  font-size: clamp(3.2rem, 19vw, 18rem);
+  font-size: clamp(2.8rem, 16vw, 14rem);
   line-height: 0.8;
   text-transform: uppercase;
   color: #f4f2ef;
