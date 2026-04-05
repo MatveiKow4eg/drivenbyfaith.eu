@@ -309,21 +309,15 @@ export default function ProductPage() {
               <div style={{ width: "100%", height: "100%", background: "#111" }} />
             )}
           </div>
-          <div className="scene-card-info">
-            <p className="scene-mini-title">{product.name}</p>
-            {selectedVariant ? <p className="scene-mini-price">{fmt(selectedVariant.price.amountMinor)} EUR</p> : null}
-          </div>
         </article>
 
         <article className="product-scene amber" aria-label="Product controls" style={{ alignItems: "stretch" }}>
           <div className="dbf-product-control-card">
             <div className="dbf-product-control-head">
               <button onClick={() => router.back()} className="dbf-back-btn">← Back</button>
-              <button className="dbf-cart-toggle in-panel" onClick={() => setCartOpen(true)}>CART ({cartCount})</button>
             </div>
 
             <h2 className="dbf-product-name">{product.name}</h2>
-            {product.description ? <p className="dbf-product-description">{product.description}</p> : null}
 
             {product.images.length > 1 ? (
               <div className="dbf-thumb-list">
@@ -341,7 +335,10 @@ export default function ProductPage() {
 
             <div className="dbf-product-selectors">
               <div>
-                <p className="dbf-picker-label">Size</p>
+                <div className="dbf-picker-head">
+                  <p className="dbf-picker-label">Size</p>
+                  {selectedVariant ? <p className="dbf-picker-price">{fmt(selectedVariant.price.amountMinor)} EUR</p> : null}
+                </div>
                 <div className="dbf-picker-row">
                   {sizes.map((size) => {
                     const variantForSize =
@@ -389,20 +386,16 @@ export default function ProductPage() {
               ) : null}
             </div>
 
-            {selectedVariant ? (
-              <p className={`dbf-stock ${selectedVariant.stock > 0 ? "in" : "out"}`}>
-                {selectedVariant.stock > 0 ? `${selectedVariant.stock} in stock` : "Out of stock"}
-              </p>
-            ) : null}
+            {product.description ? <p className="dbf-product-description">{product.description}</p> : null}
 
             <button className="dbf-add-btn" disabled={!selectedVariant || selectedVariant.stock <= 0} onClick={addToCart}>
-              {!selectedVariant || selectedVariant.stock <= 0 ? "OUT OF STOCK" : "ADD TO CART"}
+              {!selectedVariant || selectedVariant.stock <= 0 ? "Out of stock" : "Add to cart"}
             </button>
 
             {sections.length > 0 ? (
               <div className="dbf-sections" id="product-sections">
                 {sections.map((section, si) => (
-                  <SectionAccordion key={si} section={section} defaultOpen={si === 0} />
+                  <SectionAccordion key={si} section={section} defaultOpen={true} />
                 ))}
               </div>
             ) : null}
@@ -520,7 +513,7 @@ export default function ProductPage() {
 }
 
 function SectionAccordion({ section, defaultOpen }: { section: ProductSection; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen ?? false);
+  const [open, setOpen] = useState(defaultOpen ?? true);
   return (
     <div className="dbf-accordion">
       <button onClick={() => setOpen((v) => !v)} className="dbf-accordion-btn">

@@ -871,6 +871,21 @@ body {
   color: #a59d93;
 }
 
+.dbf-picker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dbf-picker-price {
+  margin: 0;
+  font-family: var(--font-headline), sans-serif;
+  font-size: 1.08rem;
+  letter-spacing: 0.04em;
+  color: #f7f2e9;
+}
+
 .dbf-picker-row {
   display: flex;
   gap: 8px;
@@ -929,6 +944,31 @@ body {
   padding: 14px 16px;
   border-radius: 11px;
   cursor: pointer;
+}
+
+.dbf-add-btn {
+  width: 100%;
+  margin-top: 6px;
+  border-color: rgba(255, 188, 122, 0.74);
+  background: linear-gradient(120deg, #ff6b26 0%, #ff8e26 46%, #f5b36b 100%);
+  color: #17110d;
+  font-family: var(--font-body), sans-serif;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  font-size: 0.94rem;
+  text-transform: none;
+  box-shadow: 0 10px 26px rgba(255, 119, 35, 0.35);
+  transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease;
+}
+
+.dbf-add-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(255, 128, 49, 0.42);
+  filter: saturate(1.05);
+}
+
+.dbf-add-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .dbf-add-btn:disabled,
