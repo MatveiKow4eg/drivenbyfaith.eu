@@ -45,6 +45,7 @@ body {
 .hero,
 .product-scene {
   min-height: 100vh;
+  min-height: 100svh;
 }
 
 .hero {
@@ -73,13 +74,17 @@ body {
   position: relative;
   width: 100%;
   min-height: 100vh;
+  min-height: 100svh;
   border: 0;
   border-radius: 0;
   overflow: hidden;
   display: grid;
   align-items: end;
   justify-items: center;
-  padding: clamp(1.1rem, 2.4vw, 2.1rem) clamp(1rem, 3vw, 2rem);
+  padding-top: clamp(1.1rem, 2.4vw, 2.1rem);
+  padding-right: clamp(1rem, 3vw, 2rem);
+  padding-left: clamp(1rem, 3vw, 2rem);
+  padding-bottom: calc(clamp(1.1rem, 2.4vw, 2.1rem) + env(safe-area-inset-bottom));
   isolation: isolate;
   background: linear-gradient(180deg, #070707 0%, #040404 58%, #030303 100%);
 }
@@ -194,7 +199,7 @@ body {
 
 .hero-copy h1 {
   width: 100%;
-  font-size: clamp(2.8rem, 16vw, 14rem);
+  font-size: clamp(2.7rem, 12vw, 11rem);
   line-height: 0.8;
   text-transform: uppercase;
   color: #f4f2ef;
@@ -1241,13 +1246,14 @@ body {
   .hero-copy {
     order: 2;
     width: 100%;
-    min-height: 100vh;
-    padding-bottom: 1.1rem;
+    min-height: 100svh;
+    padding-bottom: calc(1.1rem + env(safe-area-inset-bottom));
   }
 
   .hero-copy h1 {
-    font-size: clamp(2.5rem, 16vw, 7rem);
-    line-height: 0.86;
+    font-size: clamp(2.2rem, 10.2vw, 4.4rem);
+    line-height: 0.82;
+    letter-spacing: 0;
   }
 
   .hero-subline {
@@ -1313,13 +1319,14 @@ body {
 @media (max-width: 600px) {
   /* Hero section */
   .hero-copy {
-    padding-left: 0.8rem;
-    padding-right: 0.8rem;
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
   }
 
   .hero-copy h1 {
-    font-size: clamp(2.8rem, 18vw, 6rem);
-    line-height: 0.86;
+    font-size: clamp(1.95rem, 9.1vw, 3.05rem);
+    line-height: 0.84;
+    letter-spacing: 0;
   }
 
   .hero-logo {
@@ -1523,7 +1530,8 @@ body {
 /* ─── Small phones (≤ 420px) ────────────────────── */
 @media (max-width: 420px) {
   .hero-copy h1 {
-    font-size: clamp(2.4rem, 19vw, 5rem);
+    font-size: clamp(1.65rem, 8.6vw, 2.35rem);
+    letter-spacing: 0;
   }
 
   .hero-logo-top,
