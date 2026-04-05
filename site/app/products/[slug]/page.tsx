@@ -35,16 +35,6 @@ type CartItem = {
   imagePath: string | null;
 };
 
-type CheckoutCustomer = {
-  email: string;
-  fullName: string;
-  line1: string;
-  line2: string;
-  city: string;
-  postalCode: string;
-  countryCode: string;
-};
-
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.drivenbyfaith.eu/api/v1";
 const API_ORIGIN = API_BASE.replace(/\/api\/v1\/?$/, "");
 const CART_STORAGE_KEY = "dbf_cart_v1";
@@ -91,19 +81,6 @@ export default function ProductPage() {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [promoCode, setPromoCode] = useState("");
-  const [customer, setCustomer] = useState<CheckoutCustomer>({
-    email: "",
-    fullName: "",
-    line1: "",
-    line2: "",
-    city: "",
-    postalCode: "",
-    countryCode: "DE"
-  });
-
   const sections: ProductSection[] = (() => {
     if (!product?.sectionsJson) return [];
     try { return JSON.parse(product.sectionsJson) as ProductSection[]; } catch { return []; }
@@ -181,54 +158,7 @@ export default function ProductPage() {
     setCartItems(next);
   };
 
-  const startCheckout = async () => {
-    if (cartItems.length === 0 || checkoutLoading) return;
 
-    setCheckoutError(null);
-    setCheckoutLoading(true);
-
-    try {
-      const countryCode = customer.countryCode.trim().toUpperCase() || "DE";
-      const response = await fetch(`${API_BASE}/checkout/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          countryCode,
-          promoCode: promoCode.trim() || undefined,
-          items: cartItems.map((item) => ({ variantId: item.variantId, qty: item.qty })),
-          customer: {
-            email: customer.email.trim(),
-            fullName: customer.fullName.trim(),
-            address: {
-              line1: customer.line1.trim(),
-              line2: customer.line2.trim() || undefined,
-              city: customer.city.trim(),
-              postalCode: customer.postalCode.trim(),
-              countryCode
-            }
-          },
-          successUrl: `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${window.location.origin}/products/${slug}`
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.message ?? "Checkout failed");
-      }
-
-      if (typeof data?.checkoutUrl === "string" && data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-        return;
-      }
-
-      throw new Error("Checkout URL missing");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Checkout failed";
-      setCheckoutError(message);
-      setCheckoutLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -452,59 +382,12 @@ export default function ProductPage() {
             <span>Subtotal</span>
             <strong>{fmt(cartSubtotalMinor)} EUR</strong>
           </div>
-
-          <div className="dbf-form-grid">
-            <input
-              placeholder="Email"
-              value={customer.email}
-              onChange={(e) => setCustomer((prev) => ({ ...prev, email: e.target.value }))}
-            />
-            <input
-              placeholder="Full Name"
-              value={customer.fullName}
-              onChange={(e) => setCustomer((prev) => ({ ...prev, fullName: e.target.value }))}
-            />
-            <input
-              placeholder="Address Line 1"
-              value={customer.line1}
-              onChange={(e) => setCustomer((prev) => ({ ...prev, line1: e.target.value }))}
-            />
-            <input
-              placeholder="Address Line 2"
-              value={customer.line2}
-              onChange={(e) => setCustomer((prev) => ({ ...prev, line2: e.target.value }))}
-            />
-            <input
-              placeholder="City"
-              value={customer.city}
-              onChange={(e) => setCustomer((prev) => ({ ...prev, city: e.target.value }))}
-            />
-            <input
-              placeholder="Postal Code"
-              value={customer.postalCode}
-              onChange={(e) => setCustomer((prev) => ({ ...prev, postalCode: e.target.value }))}
-            />
-            <input
-              placeholder="Country (2 letters, e.g. DE)"
-              maxLength={2}
-              value={customer.countryCode}
-              onChange={(e) => setCustomer((prev) => ({ ...prev, countryCode: e.target.value.toUpperCase() }))}
-            />
-            <input
-              placeholder="Promo code (optional)"
-              value={promoCode}
-              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-            />
-          </div>
-
-          {checkoutError ? <p className="dbf-checkout-error">{checkoutError}</p> : null}
-
           <button
             className="dbf-checkout-btn"
-            disabled={cartItems.length === 0 || checkoutLoading}
-            onClick={startCheckout}
+            disabled={cartItems.length === 0}
+            onClick={() => { setCartOpen(false); router.push("/checkout"); }}
           >
-            {checkoutLoading ? "CREATING SESSION..." : "CHECKOUT"}
+            Proceed to checkout
           </button>
         </div>
       </aside>
