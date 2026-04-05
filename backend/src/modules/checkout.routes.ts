@@ -86,6 +86,61 @@ function generateOrderNumber() {
   return `DBF-${date}-${random}`;
 }
 
+function getFallbackShipping(countryCode: string, discountedSubtotalMinor: number) {
+  // Free shipping threshold fallback if DB shipping tables are not configured.
+  if (discountedSubtotalMinor >= 10000) {
+    return {
+      shippingMinor: 0,
+      estimatedDaysMin: 3,
+      estimatedDaysMax: 7
+    };
+  }
+
+  const euFast = new Set([
+    "DE", "FR", "ES", "IT", "PL", "NL", "BE", "AT", "CH", "SE",
+    "NO", "DK", "FI", "PT", "CZ", "SK", "HU", "RO", "BG", "HR",
+    "SI", "EE", "LV", "LT", "LU", "IE", "GR", "CY", "MT"
+  ]);
+
+  if (euFast.has(countryCode)) {
+    return {
+      shippingMinor: 700,
+      estimatedDaysMin: 3,
+      estimatedDaysMax: 7
+    };
+  }
+
+  if (countryCode === "GB") {
+    return {
+      shippingMinor: 1100,
+      estimatedDaysMin: 4,
+      estimatedDaysMax: 8
+    };
+  }
+
+  if (countryCode === "US" || countryCode === "CA") {
+    return {
+      shippingMinor: 1600,
+      estimatedDaysMin: 6,
+      estimatedDaysMax: 12
+    };
+  }
+
+  if (countryCode === "AU") {
+    return {
+      shippingMinor: 2200,
+      estimatedDaysMin: 7,
+      estimatedDaysMax: 14
+    };
+  }
+
+  return {
+    shippingMinor: 1900,
+    estimatedDaysMin: 7,
+    estimatedDaysMax: 14
+  };
+}
+
 async function computeQuote(input: z.infer<typeof quoteSchema>) {
   const { countryCode, promoCode, items } = input;
   const currency: CurrencyCode = "EUR";
@@ -199,26 +254,44 @@ async function computeQuote(input: z.infer<typeof quoteSchema>) {
     }
   });
 
-  if (!zone) {
-    throw new Error(`Shipping unavailable for country: ${countryCode}`);
+  let shippingMinor = 0;
+  let shippingEstimateDays = { min: 3, max: 7 };
+
+  if (zone) {
+    const shippingRate = await prisma.shippingRate.findFirst({
+      where: {
+        zoneId: zone.id,
+        currency,
+        isActive: true,
+        minOrderMinor: { lte: discountedSubtotalMinor },
+        maxOrderMinor: { gte: discountedSubtotalMinor }
+      },
+      orderBy: { minOrderMinor: "desc" }
+    });
+
+    if (shippingRate) {
+      shippingMinor = shippingRate.amountMinor;
+      shippingEstimateDays = {
+        min: shippingRate.estimatedDaysMin,
+        max: shippingRate.estimatedDaysMax
+      };
+    } else {
+      const fallback = getFallbackShipping(countryCode, discountedSubtotalMinor);
+      shippingMinor = fallback.shippingMinor;
+      shippingEstimateDays = {
+        min: fallback.estimatedDaysMin,
+        max: fallback.estimatedDaysMax
+      };
+    }
+  } else {
+    const fallback = getFallbackShipping(countryCode, discountedSubtotalMinor);
+    shippingMinor = fallback.shippingMinor;
+    shippingEstimateDays = {
+      min: fallback.estimatedDaysMin,
+      max: fallback.estimatedDaysMax
+    };
   }
 
-  const shippingRate = await prisma.shippingRate.findFirst({
-    where: {
-      zoneId: zone.id,
-      currency,
-      isActive: true,
-      minOrderMinor: { lte: discountedSubtotalMinor },
-      maxOrderMinor: { gte: discountedSubtotalMinor }
-    },
-    orderBy: { minOrderMinor: "desc" }
-  });
-
-  if (!shippingRate) {
-    throw new Error(`No shipping rate for ${countryCode} with ${currency} subtotal ${discountedSubtotalMinor}`);
-  }
-
-  const shippingMinor = shippingRate.amountMinor;
   const totalMinor = discountedSubtotalMinor + shippingMinor;
 
   return {
@@ -231,10 +304,7 @@ async function computeQuote(input: z.infer<typeof quoteSchema>) {
     totalMinor,
     promoCode: appliedPromoCode,
     promoCodeId: appliedPromoCodeId,
-    shippingEstimateDays: {
-      min: shippingRate.estimatedDaysMin,
-      max: shippingRate.estimatedDaysMax
-    }
+    shippingEstimateDays
   };
 }
 

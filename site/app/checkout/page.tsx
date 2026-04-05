@@ -25,6 +25,12 @@ type NominatimResult = {
     town?: string;
     village?: string;
     municipality?: string;
+    suburb?: string;
+    neighbourhood?: string;
+    city_district?: string;
+    county?: string;
+    state?: string;
+    state_district?: string;
     postcode?: string;
     country_code?: string;
   };
@@ -79,10 +85,14 @@ export default function CheckoutPage() {
 
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [matchedAddress, setMatchedAddress] = useState("");
   const [line1, setLine1] = useState("");
   const [line2, setLine2] = useState("");
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [district, setDistrict] = useState("");
+  const [county, setCounty] = useState("");
+  const [region, setRegion] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [countryName, setCountryName] = useState("");
 
@@ -130,6 +140,7 @@ export default function CheckoutPage() {
   }, [fetchQuote]);
 
   const searchAddress = (value: string) => {
+    setMatchedAddress(value);
     setLine1(value);
     setSuggestions([]);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -149,6 +160,9 @@ export default function CheckoutPage() {
     const a = item.address;
     const road = [a.road, a.house_number].filter(Boolean).join(" ");
     const resolvedCity = a.city ?? a.town ?? a.village ?? a.municipality ?? "";
+    const resolvedDistrict = a.suburb ?? a.neighbourhood ?? a.city_district ?? "";
+    const resolvedCounty = a.county ?? "";
+    const resolvedRegion = a.state ?? a.state_district ?? "";
     const resolvedCountry = (a.country_code ?? "").toUpperCase();
     const COUNTRY_NAMES: Record<string, string> = {
       DE: "Germany", FR: "France", ES: "Spain", IT: "Italy", PL: "Poland",
@@ -160,9 +174,22 @@ export default function CheckoutPage() {
       GR: "Greece", CY: "Cyprus", MT: "Malta", GB: "United Kingdom",
       US: "United States", CA: "Canada", AU: "Australia",
     };
-    setLine1(road || item.display_name.split(",")[0]);
+    const compactLine1 = [
+      road || item.display_name.split(",")[0],
+      resolvedDistrict,
+      [a.postcode, resolvedCounty].filter(Boolean).join(" "),
+      resolvedRegion,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    setMatchedAddress(item.display_name);
+    setLine1(compactLine1);
     setCity(resolvedCity);
     setPostalCode(a.postcode ?? "");
+    setDistrict(resolvedDistrict);
+    setCounty(resolvedCounty);
+    setRegion(resolvedRegion);
     setCountryCode(resolvedCountry);
     setCountryName(COUNTRY_NAMES[resolvedCountry] ?? resolvedCountry);
     setSuggestionsOpen(false);
@@ -178,6 +205,7 @@ export default function CheckoutPage() {
       const response = await fetch(`${API_BASE}/checkout/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        
         body: JSON.stringify({
           countryCode: countryCode.toUpperCase(),
           promoCode: promoCode.trim() || undefined,
@@ -187,7 +215,7 @@ export default function CheckoutPage() {
             fullName: fullName.trim(),
             address: {
               line1: line1.trim(),
-              line2: line2.trim() || undefined,
+              line2: [line2.trim(), district.trim(), county.trim(), region.trim()].filter(Boolean).join(", ") || undefined,
               city: city.trim(),
               postalCode: postalCode.trim(),
               countryCode: countryCode.toUpperCase(),
@@ -239,6 +267,11 @@ export default function CheckoutPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
+                <input
+                  placeholder="Address from search (auto)"
+                  value={matchedAddress}
+                  onChange={(e) => setMatchedAddress(e.target.value)}
+                />
                 <div className="dbf-autocomplete-wrap">
                   <input
                     placeholder="Start typing your address…"
@@ -264,6 +297,11 @@ export default function CheckoutPage() {
                   onChange={(e) => setLine2(e.target.value)}
                 />
                 <input
+                  placeholder="District / Area"
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
+                />
+                <input
                   placeholder="City"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
@@ -273,13 +311,30 @@ export default function CheckoutPage() {
                   value={postalCode}
                   onChange={(e) => setPostalCode(e.target.value)}
                 />
+                <input
+                  placeholder="County"
+                  value={county}
+                  onChange={(e) => setCounty(e.target.value)}
+                />
+                <input
+                  placeholder="Region / State"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                />
                 {countryCode && (
                   <div className="dbf-country-badge">
                     <span className="dbf-country-flag">{countryCode}</span>
                     <span>{countryName || countryCode}</span>
                     <button
                       className="dbf-country-clear"
-                      onClick={() => { setCountryCode(""); setCountryName(""); setQuote(null); }}
+                      onClick={() => {
+                        setCountryCode("");
+                        setCountryName("");
+                        setDistrict("");
+                        setCounty("");
+                        setRegion("");
+                        setQuote(null);
+                      }}
                       type="button"
                     >×</button>
                   </div>
