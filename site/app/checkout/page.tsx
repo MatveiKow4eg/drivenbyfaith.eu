@@ -310,30 +310,40 @@ export default function CheckoutPage() {
                     </ul>
                   )}
                 </div>
-                {countryCode && (
-                  <div className="dbf-country-badge">
-                    <span className="dbf-country-flag">{countryCode}</span>
-                    <span>Country: {countryName || countryCode}</span>
-                    <button
-                      className="dbf-country-clear"
-                      onClick={() => {
-                        setCountryCode("");
-                        setCountryName("");
-                        setRegionName("");
-                        setCity("");
-                        setPostalCode("");
-                        setQuote(null);
-                      }}
-                      type="button"
-                    >×</button>
-                  </div>
-                )}
-                {regionName && (
-                  <div className="dbf-country-badge">
-                    <span className="dbf-country-flag">RG</span>
-                    <span>Region: {regionName}</span>
-                  </div>
-                )}
+                <input
+                  placeholder="Region / State / County"
+                  value={regionName}
+                  onChange={(e) => setRegionName(e.target.value)}
+                />
+                <input
+                  placeholder="City"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                />
+                <input
+                  placeholder="Postal Code"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                />
+                <input
+                  placeholder="Country code (2 letters, e.g. DE)"
+                  value={countryCode}
+                  maxLength={2}
+                  onChange={(e) => {
+                    const next = e.target.value.toUpperCase();
+                    setCountryCode(next);
+                    if (next.length === 2) {
+                      triggerQuote(next);
+                    } else {
+                      setQuote(null);
+                    }
+                  }}
+                />
+                <input
+                  placeholder="Country"
+                  value={countryName}
+                  onChange={(e) => setCountryName(e.target.value)}
+                />
                 <input
                   placeholder="Promo code (optional)"
                   value={promoCode}
