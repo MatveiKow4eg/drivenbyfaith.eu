@@ -637,7 +637,8 @@ body {
 }
 
 .dbf-product-page .product-selection {
-  margin-top: clamp(1rem, 2.2vw, 1.8rem);
+  margin-top: 0;
+  background: transparent;
 }
 
 .dbf-product-page .hero {
