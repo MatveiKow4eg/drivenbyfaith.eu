@@ -1804,7 +1804,7 @@ body {
 
 @media (max-width: 600px) {
   .dbf-checkout-shell {
-    padding: 1.2rem 0.9rem 4rem;
+    padding: 1.2rem 0.9rem calc(5.6rem + env(safe-area-inset-bottom)) 0.9rem;
   }
 
   .dbf-checkout-title {
@@ -1844,6 +1844,18 @@ body {
 
   .dbf-autocomplete-list {
     max-height: 200px;
+  }
+
+  .dbf-checkout-btn {
+    position: fixed;
+    left: 0.9rem;
+    right: 0.9rem;
+    bottom: max(0.8rem, env(safe-area-inset-bottom));
+    z-index: 120;
+    width: auto;
+    min-height: 52px;
+    margin: 0;
+    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.45);
   }
 }
 
