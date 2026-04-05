@@ -1164,7 +1164,12 @@ body {
   gap: 7px;
 }
 
+.dbf-form-grid > * {
+  width: 100%;
+}
+
 .dbf-form-grid input {
+  width: 100%;
   height: 40px;
   border-radius: 9px;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -1416,6 +1421,11 @@ body {
 
 .dbf-autocomplete-wrap {
   position: relative;
+  width: 100%;
+}
+
+.dbf-autocomplete-wrap input {
+  width: 100%;
 }
 
 .dbf-autocomplete-list {
@@ -1453,6 +1463,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 9px 12px;
   background: rgba(255, 141, 38, 0.1);
   border: 1px solid rgba(255, 141, 38, 0.3);
