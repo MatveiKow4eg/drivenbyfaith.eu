@@ -81,6 +81,7 @@ export default function ProductPage() {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [pendingRemoveVariantId, setPendingRemoveVariantId] = useState<string | null>(null);
   const sections: ProductSection[] = (() => {
     if (!product?.sectionsJson) return [];
     try { return JSON.parse(product.sectionsJson) as ProductSection[]; } catch { return []; }
@@ -146,16 +147,43 @@ export default function ProductPage() {
 
   const updateCartQty = (variantId: string, qty: number) => {
     const next = cartItems
-      .map((item) => (item.variantId === variantId ? { ...item, qty: Math.min(20, qty) } : item))
+      .map((item) => (item.variantId === variantId ? { ...item, qty: Math.max(0, Math.min(20, qty)) } : item))
       .filter((item) => item.qty > 0);
     writeCart(next);
     setCartItems(next);
+    if (pendingRemoveVariantId === variantId) {
+      setPendingRemoveVariantId(null);
+    }
   };
 
   const removeFromCart = (variantId: string) => {
     const next = cartItems.filter((item) => item.variantId !== variantId);
     writeCart(next);
     setCartItems(next);
+    if (pendingRemoveVariantId === variantId) {
+      setPendingRemoveVariantId(null);
+    }
+  };
+
+  const handleCartMinus = (item: CartItem) => {
+    if (item.qty > 1) {
+      updateCartQty(item.variantId, item.qty - 1);
+      return;
+    }
+
+    if (pendingRemoveVariantId === item.variantId) {
+      removeFromCart(item.variantId);
+      return;
+    }
+
+    setPendingRemoveVariantId(item.variantId);
+  };
+
+  const handleCartPlus = (item: CartItem) => {
+    updateCartQty(item.variantId, item.qty + 1);
+    if (pendingRemoveVariantId === item.variantId) {
+      setPendingRemoveVariantId(null);
+    }
   };
 
 
@@ -364,9 +392,14 @@ export default function ProductPage() {
                   {item.size} / {item.color}
                 </p>
                 <div className="dbf-cart-qty-row">
-                  <button onClick={() => updateCartQty(item.variantId, item.qty - 1)}>-</button>
+                  <button
+                    className={pendingRemoveVariantId === item.variantId ? "dbf-cart-minus-btn confirm" : "dbf-cart-minus-btn"}
+                    onClick={() => handleCartMinus(item)}
+                  >
+                    -
+                  </button>
                   <span>{item.qty}</span>
-                  <button onClick={() => updateCartQty(item.variantId, item.qty + 1)}>+</button>
+                  <button onClick={() => handleCartPlus(item)}>+</button>
                   <strong>{fmt(item.unitPriceMinor * item.qty)} EUR</strong>
                 </div>
               </div>

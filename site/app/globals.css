@@ -1137,6 +1137,12 @@ body {
   cursor: pointer;
 }
 
+.dbf-cart-minus-btn.confirm {
+  border-color: rgba(255, 70, 70, 0.72);
+  background: rgba(150, 20, 20, 0.85);
+  color: #fff;
+}
+
 .dbf-cart-qty-row span {
   min-width: 22px;
   text-align: center;
