@@ -1324,7 +1324,7 @@ body {
   }
 
   .hero-copy h1 {
-    font-size: clamp(1.95rem, 9.1vw, 3.05rem);
+    font-size: clamp(1.8rem, 15vw, 3.5rem);
     line-height: 0.84;
     letter-spacing: 0;
   }
@@ -1530,7 +1530,7 @@ body {
 /* ─── Small phones (≤ 420px) ────────────────────── */
 @media (max-width: 420px) {
   .hero-copy h1 {
-    font-size: clamp(1.65rem, 8.6vw, 2.35rem);
+    font-size: clamp(1.8rem, 15vw, 3.5rem);
     letter-spacing: 0;
   }
 
