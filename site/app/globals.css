@@ -257,9 +257,21 @@ body {
   position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  margin-top: 0;
+  margin-top: -1px;
   padding-top: 0;
   z-index: 2;
+}
+
+.product-selection::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
+  pointer-events: none;
+  z-index: 3;
+  background: linear-gradient(180deg, #030303 0%, rgba(3, 3, 3, 0) 100%);
 }
 
 .product-scene {
@@ -276,13 +288,13 @@ body {
 
 .product-scene.red {
   background:
-    linear-gradient(180deg, rgba(3, 3, 3, 0) 0%, rgba(10, 3, 0, 0.26) 24%, rgba(5, 1, 0, 0.68) 62%, #030303 100%),
+    linear-gradient(180deg, rgba(3, 3, 3, 0.94) 0%, rgba(10, 3, 0, 0.34) 24%, rgba(5, 1, 0, 0.68) 62%, #030303 100%),
     radial-gradient(ellipse 62% 48% at 50% 56%, rgba(80, 10, 0, 0.22), rgba(5, 1, 0, 0.52) 66%, transparent 100%);
 }
 
 .product-scene.amber {
   background:
-    linear-gradient(180deg, rgba(3, 3, 3, 0) 0%, rgba(10, 6, 0, 0.24) 24%, rgba(5, 3, 0, 0.66) 62%, #030303 100%),
+    linear-gradient(180deg, rgba(3, 3, 3, 0.94) 0%, rgba(10, 6, 0, 0.32) 24%, rgba(5, 3, 0, 0.66) 62%, #030303 100%),
     radial-gradient(ellipse 62% 48% at 50% 56%, rgba(80, 44, 0, 0.2), rgba(5, 3, 0, 0.5) 66%, transparent 100%);
 }
 
