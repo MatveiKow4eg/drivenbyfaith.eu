@@ -14,7 +14,7 @@ export default function CheckoutSuccess() {
           </svg>
         </div>
         <h1 className="dbf-checkout-title">Thank you!</h1>
-        <p className="dbf-success-sub">Your order has been placed successfully. You'll receive a confirmation email shortly.</p>
+        <p className="dbf-success-sub">Your order has been placed successfully. You&apos;ll receive a confirmation email shortly.</p>
         <button onClick={() => router.push("/")} className="dbf-checkout-btn dbf-success-btn">
           Back to shop
         </button>
