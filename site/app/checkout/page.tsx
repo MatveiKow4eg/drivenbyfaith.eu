@@ -102,11 +102,13 @@ export default function CheckoutPage() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quote, setQuote] = useState<QuoteResult | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const quoteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setCartItems(readCart());
+    setMounted(true);
   }, []);
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.qty * item.unitPriceMinor, 0);
@@ -272,7 +274,9 @@ export default function CheckoutPage() {
 
         <h1 className="dbf-checkout-title">Checkout</h1>
 
-        {cartItems.length === 0 ? (
+        {!mounted ? (
+          <p className="dbf-cart-empty" style={{ opacity: 0 }}>Loading…</p>
+        ) : cartItems.length === 0 ? (
           <p className="dbf-cart-empty">Your cart is empty.</p>
         ) : (
           <div className="dbf-checkout-grid">
@@ -415,3 +419,4 @@ export default function CheckoutPage() {
     </main>
   );
 }
+
