@@ -114,7 +114,12 @@ async function seedProductAndVariants() {
 }
 
 async function seedShipping() {
-  const countries = ["DE", "FR", "ES", "IT", "PL"];
+  const countries = [
+    "DE", "FR", "ES", "IT", "PL", "NL", "BE", "AT", "CH", "SE",
+    "NO", "DK", "FI", "PT", "CZ", "SK", "HU", "RO", "BG", "HR",
+    "SI", "EE", "LV", "LT", "LU", "IE", "GR", "CY", "MT", "GB",
+    "US", "CA", "AU"
+  ];
 
   for (const countryCode of countries) {
     const zone = await prisma.shippingZone.upsert({

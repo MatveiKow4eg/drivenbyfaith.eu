@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type CartItem = {
@@ -15,14 +15,27 @@ type CartItem = {
   imagePath: string | null;
 };
 
-type CheckoutCustomer = {
-  email: string;
-  fullName: string;
-  line1: string;
-  line2: string;
-  city: string;
-  postalCode: string;
-  countryCode: string;
+type NominatimResult = {
+  place_id: number;
+  display_name: string;
+  address: {
+    road?: string;
+    house_number?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    postcode?: string;
+    country_code?: string;
+  };
+};
+
+type QuoteResult = {
+  shippingMinor: number;
+  totalMinor: number;
+  subtotalMinor: number;
+  shippingEstimateDays: { min: number; max: number };
+  currency: string;
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.drivenbyfaith.eu/api/v1";
@@ -63,15 +76,23 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState("");
-  const [customer, setCustomer] = useState<CheckoutCustomer>({
-    email: "",
-    fullName: "",
-    line1: "",
-    line2: "",
-    city: "",
-    postalCode: "",
-    countryCode: "DE",
-  });
+
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [line1, setLine1] = useState("");
+  const [line2, setLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [countryCode, setCountryCode] = useState("");
+  const [countryName, setCountryName] = useState("");
+
+  const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quote, setQuote] = useState<QuoteResult | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quoteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setCartItems(readCart());
@@ -79,28 +100,97 @@ export default function CheckoutPage() {
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.qty * item.unitPriceMinor, 0);
 
+  const fetchQuote = useCallback(async (country: string) => {
+    if (!country || cartItems.length === 0) return;
+    setQuoteLoading(true);
+    setQuoteError(null);
+    try {
+      const resp = await fetch(`${API_BASE}/checkout/quote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          countryCode: country.toUpperCase(),
+          items: cartItems.map((i) => ({ variantId: i.variantId, qty: i.qty })),
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.message ?? "Could not get shipping quote");
+      setQuote(data);
+    } catch (e) {
+      setQuoteError(e instanceof Error ? e.message : "Shipping unavailable");
+      setQuote(null);
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [cartItems]);
+
+  const triggerQuote = useCallback((country: string) => {
+    if (quoteDebounceRef.current) clearTimeout(quoteDebounceRef.current);
+    quoteDebounceRef.current = setTimeout(() => fetchQuote(country), 500);
+  }, [fetchQuote]);
+
+  const searchAddress = (value: string) => {
+    setLine1(value);
+    setSuggestions([]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length < 4) return;
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&addressdetails=1&limit=5`;
+        const resp = await fetch(url, { headers: { "Accept-Language": "en" } });
+        const data: NominatimResult[] = await resp.json();
+        setSuggestions(data);
+        setSuggestionsOpen(true);
+      } catch { /* ignore */ }
+    }, 600);
+  };
+
+  const pickSuggestion = (item: NominatimResult) => {
+    const a = item.address;
+    const road = [a.road, a.house_number].filter(Boolean).join(" ");
+    const resolvedCity = a.city ?? a.town ?? a.village ?? a.municipality ?? "";
+    const resolvedCountry = (a.country_code ?? "").toUpperCase();
+    const COUNTRY_NAMES: Record<string, string> = {
+      DE: "Germany", FR: "France", ES: "Spain", IT: "Italy", PL: "Poland",
+      NL: "Netherlands", BE: "Belgium", AT: "Austria", CH: "Switzerland",
+      SE: "Sweden", NO: "Norway", DK: "Denmark", FI: "Finland", PT: "Portugal",
+      CZ: "Czech Republic", SK: "Slovakia", HU: "Hungary", RO: "Romania",
+      BG: "Bulgaria", HR: "Croatia", SI: "Slovenia", EE: "Estonia",
+      LV: "Latvia", LT: "Lithuania", LU: "Luxembourg", IE: "Ireland",
+      GR: "Greece", CY: "Cyprus", MT: "Malta", GB: "United Kingdom",
+      US: "United States", CA: "Canada", AU: "Australia",
+    };
+    setLine1(road || item.display_name.split(",")[0]);
+    setCity(resolvedCity);
+    setPostalCode(a.postcode ?? "");
+    setCountryCode(resolvedCountry);
+    setCountryName(COUNTRY_NAMES[resolvedCountry] ?? resolvedCountry);
+    setSuggestionsOpen(false);
+    setSuggestions([]);
+    if (resolvedCountry) triggerQuote(resolvedCountry);
+  };
+
   const handleSubmit = async () => {
-    if (cartItems.length === 0 || loading) return;
+    if (cartItems.length === 0 || loading || !countryCode) return;
     setError(null);
     setLoading(true);
     try {
-      const countryCode = customer.countryCode.trim().toUpperCase() || "DE";
       const response = await fetch(`${API_BASE}/checkout/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          countryCode,
+          countryCode: countryCode.toUpperCase(),
           promoCode: promoCode.trim() || undefined,
           items: cartItems.map((item) => ({ variantId: item.variantId, qty: item.qty })),
           customer: {
-            email: customer.email.trim(),
-            fullName: customer.fullName.trim(),
+            email: email.trim(),
+            fullName: fullName.trim(),
             address: {
-              line1: customer.line1.trim(),
-              line2: customer.line2.trim() || undefined,
-              city: customer.city.trim(),
-              postalCode: customer.postalCode.trim(),
-              countryCode,
+              line1: line1.trim(),
+              line2: line2.trim() || undefined,
+              city: city.trim(),
+              postalCode: postalCode.trim(),
+              countryCode: countryCode.toUpperCase(),
             },
           },
           successUrl: `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -141,40 +231,59 @@ export default function CheckoutPage() {
                 <input
                   placeholder="Email"
                   type="email"
-                  value={customer.email}
-                  onChange={(e) => setCustomer((p) => ({ ...p, email: e.target.value }))}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
                 <input
                   placeholder="Full Name"
-                  value={customer.fullName}
-                  onChange={(e) => setCustomer((p) => ({ ...p, fullName: e.target.value }))}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                 />
+                <div className="dbf-autocomplete-wrap">
+                  <input
+                    placeholder="Start typing your address…"
+                    value={line1}
+                    autoComplete="off"
+                    onChange={(e) => searchAddress(e.target.value)}
+                    onFocus={() => suggestions.length > 0 && setSuggestionsOpen(true)}
+                    onBlur={() => setTimeout(() => setSuggestionsOpen(false), 180)}
+                  />
+                  {suggestionsOpen && suggestions.length > 0 && (
+                    <ul className="dbf-autocomplete-list">
+                      {suggestions.map((s) => (
+                        <li key={s.place_id} onMouseDown={() => pickSuggestion(s)}>
+                          {s.display_name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <input
-                  placeholder="Address Line 1"
-                  value={customer.line1}
-                  onChange={(e) => setCustomer((p) => ({ ...p, line1: e.target.value }))}
-                />
-                <input
-                  placeholder="Address Line 2 (optional)"
-                  value={customer.line2}
-                  onChange={(e) => setCustomer((p) => ({ ...p, line2: e.target.value }))}
+                  placeholder="Apartment, suite… (optional)"
+                  value={line2}
+                  onChange={(e) => setLine2(e.target.value)}
                 />
                 <input
                   placeholder="City"
-                  value={customer.city}
-                  onChange={(e) => setCustomer((p) => ({ ...p, city: e.target.value }))}
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
                 />
                 <input
                   placeholder="Postal Code"
-                  value={customer.postalCode}
-                  onChange={(e) => setCustomer((p) => ({ ...p, postalCode: e.target.value }))}
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
                 />
-                <input
-                  placeholder="Country (2 letters, e.g. DE)"
-                  maxLength={2}
-                  value={customer.countryCode}
-                  onChange={(e) => setCustomer((p) => ({ ...p, countryCode: e.target.value.toUpperCase() }))}
-                />
+                {countryCode && (
+                  <div className="dbf-country-badge">
+                    <span className="dbf-country-flag">{countryCode}</span>
+                    <span>{countryName || countryCode}</span>
+                    <button
+                      className="dbf-country-clear"
+                      onClick={() => { setCountryCode(""); setCountryName(""); setQuote(null); }}
+                      type="button"
+                    >×</button>
+                  </div>
+                )}
                 <input
                   placeholder="Promo code (optional)"
                   value={promoCode}
@@ -209,15 +318,34 @@ export default function CheckoutPage() {
                 <span>Subtotal</span>
                 <strong>{fmt(subtotal)} EUR</strong>
               </div>
+              {quoteLoading && <p className="dbf-quote-loading">Calculating shipping…</p>}
+              {quote && !quoteLoading && (
+                <>
+                  <div className="dbf-subtotal-row">
+                    <span>
+                      Shipping
+                      {quote.shippingEstimateDays
+                        ? ` (${quote.shippingEstimateDays.min}–${quote.shippingEstimateDays.max} days)`
+                        : ""}
+                    </span>
+                    <strong>{quote.shippingMinor === 0 ? "Free" : `${fmt(quote.shippingMinor)} EUR`}</strong>
+                  </div>
+                  <div className="dbf-subtotal-row dbf-total-row">
+                    <span>Total</span>
+                    <strong>{fmt(quote.totalMinor)} EUR</strong>
+                  </div>
+                </>
+              )}
+              {quoteError && <p className="dbf-checkout-error">{quoteError}</p>}
 
               {error ? <p className="dbf-checkout-error">{error}</p> : null}
 
               <button
                 className="dbf-checkout-btn"
-                disabled={loading}
+                disabled={loading || !countryCode}
                 onClick={handleSubmit}
               >
-                {loading ? "Creating session…" : "Proceed to payment"}
+                {loading ? "Creating session…" : !countryCode ? "Enter your address first" : "Proceed to payment"}
               </button>
             </section>
 

@@ -146,7 +146,7 @@ export default function ProductPage() {
 
   const updateCartQty = (variantId: string, qty: number) => {
     const next = cartItems
-      .map((item) => (item.variantId === variantId ? { ...item, qty: Math.max(1, Math.min(20, qty)) } : item))
+      .map((item) => (item.variantId === variantId ? { ...item, qty: Math.min(20, qty) } : item))
       .filter((item) => item.qty > 0);
     writeCart(next);
     setCartItems(next);
@@ -359,9 +359,6 @@ export default function ProductPage() {
               <div key={item.variantId} className="dbf-cart-item">
                 <div className="dbf-cart-item-top">
                   <p>{item.name}</p>
-                  <button className="dbf-remove-btn" onClick={() => removeFromCart(item.variantId)}>
-                    Remove
-                  </button>
                 </div>
                 <p className="dbf-cart-item-meta">
                   {item.size} / {item.color}
