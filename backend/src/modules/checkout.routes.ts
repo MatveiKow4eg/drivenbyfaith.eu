@@ -272,8 +272,8 @@ async function computeQuote(input: z.infer<typeof quoteSchema>) {
     if (shippingRate) {
       shippingMinor = shippingRate.amountMinor;
       shippingEstimateDays = {
-        min: shippingRate.estimatedDaysMin,
-        max: shippingRate.estimatedDaysMax
+        min: shippingRate.estimatedDaysMin ?? 3,
+        max: shippingRate.estimatedDaysMax ?? 7
       };
     } else {
       const fallback = getFallbackShipping(countryCode, discountedSubtotalMinor);
